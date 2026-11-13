@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10263f">
+  <title>عالم الشمال | إدارة النقل والحاويات</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <button class="language-toggle" type="button" data-language-toggle>English</button>
+      <a class="brand auth-brand" href="#" aria-label="عالم الشمال">
+        <span class="brand-mark">ع</span>
+        <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
+      </a>
+      <div id="auth-setup-panel" class="auth-panel hidden">
+        <span class="eyebrow">الإعداد الأول</span>
+        <h1>إنشاء حساب الأدمن</h1>
+        <p>أنشئ حساب المدير الأول لإدارة النظام وإضافة حسابات السائقين.</p>
+        <form id="admin-setup-form" class="auth-form">
+          <label class="field">اسم المستخدم<input name="username" required minlength="3" autocomplete="username" placeholder="اسم المستخدم"></label>
+          <label class="field">كلمة المرور<input name="password" type="password" required minlength="12" autocomplete="new-password" placeholder="١٢ حرفاً على الأقل"></label>
+          <label class="field">تأكيد كلمة المرور<input name="passwordConfirm" type="password" required minlength="12" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور"></label>
+          <button class="button button-primary" type="submit">إنشاء حساب الأدمن</button>
+        </form>
+      </div>
+      <div id="auth-login-panel" class="auth-panel hidden">
+        <span class="eyebrow">الدخول إلى النظام</span>
+        <h1>مرحباً بعودتك</h1>
+        <p>سجّل الدخول للمتابعة إلى الواجهة المناسبة لحسابك.</p>
+        <form id="login-form" class="auth-form">
+          <label class="field">اسم المستخدم<input name="username" required autocomplete="username" placeholder="اسم المستخدم"></label>
+          <label class="field">كلمة المرور<input name="password" type="password" required autocomplete="current-password" placeholder="كلمة المرور"></label>
+          <button class="button button-primary" type="submit">تسجيل الدخول</button>
+        </form>
+      </div>
+      <div id="auth-message" class="auth-message hidden" role="alert"></div>
+      <p class="auth-disclaimer">يتطلب النظام اتصالاً بخادم الشركة. لا تُحفظ بيانات العمل على هذا الجهاز.</p>
+    </div>
+  </section>
+
+  <div id="admin-app" class="app-shell hidden">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="عالم الشمال - الصفحة الرئيسية">
+        <span class="brand-mark">ع</span>
+        <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
+      </a>
+      <div class="sidebar-label">القائمة الرئيسية</div>
+      <nav class="navigation" aria-label="القائمة الرئيسية">
+        <button class="nav-link active" data-view="dashboard"><span class="nav-icon">⌂</span>لوحة التحكم</button>
+        <button class="nav-link" data-view="fasah"><span class="nav-icon">⌕</span>استعلام الفسح</button>
+        <button class="nav-link" data-view="issue"><span class="nav-icon">▤</span>إصدار وثيقة نقل</button>
+        <button class="nav-link" data-view="fleet"><span class="nav-icon">▰</span>الأسطول والسائقون</button>
+        <button class="nav-link" data-view="archive"><span class="nav-icon">▣</span>أرشيف الوثائق</button>
+        <button class="nav-link" data-view="reports"><span class="nav-icon">▥</span>التقارير والتصدير</button>
+        <button id="admin-accounts-link" class="nav-link hidden" data-view="accounts"><span class="nav-icon">♙</span>حسابات المستخدمين</button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-note">
+        <span class="note-icon">i</span>
+        <div><strong>بيانات مركزية آمنة</strong><p>تُحفظ العمليات على خادم الشركة.</p></div>
+      </div>
+      <div class="user-card">
+        <div class="avatar">ع</div>
+        <div><strong id="current-user-name">مدير النظام</strong><small id="current-user-role">إدارة العمليات</small></div>
+        <span class="user-menu">•••</span>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">ع</span><strong>عالم الشمال</strong></div>
+        <div class="breadcrumb"><span>الرئيسية</span><b>/</b><strong id="page-title">لوحة التحكم</strong></div>
+        <div class="topbar-tools">
+          <div class="service-health" aria-label="حالة الربط">
+            <span class="health-item" data-integration="fasah"><i class="health-dot warning"></i>فسح</span>
+            <span class="health-item" data-integration="bayan"><i class="health-dot warning"></i>بيان</span>
+            <span class="health-item" data-integration="naql"><i class="health-dot warning"></i>نقل</span>
+          </div>
+          <span class="topbar-divider"></span>
+          <span class="today-label" id="today-label"></span>
+          <button class="language-toggle" type="button" data-language-toggle>English</button>
+          <button id="admin-logout" class="logout-button" type="button">خروج</button>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <section class="view active" id="view-dashboard">
+          <div class="page-heading">
+            <div><span class="eyebrow">نظرة عامة</span><h1>أهلاً بك، مدير النظام <span class="wave">✦</span></h1><p>إليك ملخص حركة الأسطول والعمليات لهذا اليوم.</p></div>
+            <button class="button button-primary" data-go="fasah"><span>＋</span> عملية نقل جديدة</button>
+          </div>
+          <div class="stats-grid">
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon blue">▰</span><span class="stat-caption">إجمالي الأسطول النشط</span></div><div class="stat-value" id="stat-trucks">0</div><div class="stat-foot"><span class="positive">● نشط</span><span>شاحنة مسجلة</span></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon violet">▤</span><span class="stat-caption">وثائق النقل المسجلة</span></div><div class="stat-value" id="stat-documents">0</div><div class="stat-foot"><span class="stat-neutral">إجمالي الأرشيف</span><span>وثيقة</span></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon green">✓</span><span class="stat-caption">حاويات مفسوحة اليوم</span></div><div class="stat-value" id="stat-clearances">0</div><div class="stat-foot"><span class="positive">● مفسوحة</span><span>حسب بيانات الفسح المسجلة</span></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-icon amber">⌖</span><span class="stat-caption">شاحنات في الموانئ</span></div><div class="stat-value" id="stat-ports">0</div><div class="stat-foot"><span class="stat-neutral">قيد التشغيل</span><span>شاحنة</span></div></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel recent-panel">
+              <div class="panel-heading"><div><h2>آخر العمليات</h2><p>أحدث وثائق النقل المسجلة في النظام</p></div><button class="text-button" data-go="archive">عرض الأرشيف <span>←</span></button></div>
+              <div class="table-scroll"><table><thead><tr><th>رقم الوثيقة</th><th>الحاوية</th><th>العميل</th><th>الميناء</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="recent-operations"></tbody></table></div>
+            </section>
+            <section class="panel ports-panel">
+              <div class="panel-heading"><div><h2>حالة الربط</h2><p>حالة الخدمات الحكومية من الخادم</p></div><span class="live-indicator">● مباشر</span></div>
+              <div class="integration-list">
+                <div class="integration-row" data-integration-row="fasah"><span class="integration-logo fasah-logo">ف</span><span class="integration-name"><strong>منصة فسح</strong><small>الاستعلام عن بيانات الفسح</small></span><span class="status-pill status-pending" data-integration-status>غير مربوط</span></div>
+                <div class="integration-row" data-integration-row="bayan"><span class="integration-logo bayan-logo">ب</span><span class="integration-name"><strong>منصة بيان</strong><small>إصدار وثائق النقل</small></span><span class="status-pill status-pending" data-integration-status>غير مربوط</span></div>
+                <div class="integration-row" data-integration-row="naql"><span class="integration-logo naql-logo">ن</span><span class="integration-name"><strong>منصة نقل</strong><small>خدمات النقل</small></span><span class="status-pill status-pending" data-integration-status>غير مربوط</span></div>
+              </div>
+              <div class="integration-foot">لن تُعرض الخدمة على أنها متصلة حتى ينجح فحص الاتصال الرسمي.</div>
+            </section>
+          </div>
+          <section class="panel quick-panel"><div class="panel-heading"><div><h2>الوصول السريع</h2><p>ابدأ عملية أو راجع بياناتك بسرعة</p></div></div><div class="quick-actions"><button data-go="fasah"><span class="quick-icon blue">⌕</span><span><strong>استعلام عن فسح</strong><small>ابحث برقم البيان أو الحاوية</small></span><b>←</b></button><button data-go="issue"><span class="quick-icon violet">▤</span><span><strong>إصدار وثيقة</strong><small>إنشاء وثيقة نقل جديدة</small></span><b>←</b></button><button data-go="reports"><span class="quick-icon green">▥</span><span><strong>التقارير</strong><small>تصفية وتصدير العمليات</small></span><b>←</b></button></div></section>
+        </section>
+
+        <section class="view" id="view-fasah">
+          <div class="page-heading"><div><span class="eyebrow">السجلات الجمركية</span><h1>بيانات الفسح</h1><p>ابحث في السجلات وأدخل بيانات الفسح يدوياً.</p></div><button id="toggle-clearance-form" class="button button-secondary" type="button">＋ إدخال بيان يدوياً</button></div>
+          <div id="clearance-form-wrap" class="panel inline-form-wrap hidden">
+            <form id="clearance-form" class="inline-form">
+              <label class="field">رقم البيان الجمركي<input name="declarationNumber" required maxlength="64"></label>
+              <label class="field">رقم الحاوية<input name="containerNumber" required maxlength="32"></label>
+              <label class="field">المقاس<select name="size" required><option value="FT_20">20 قدم</option><option value="FT_40">40 قدم</option></select></label>
+              <label class="field">نوع الحاوية<select name="type" required><option value="DRY">جافة</option><option value="REFRIGERATED">مبردة</option><option value="OPEN_TOP">سقف مفتوح</option><option value="FLAT_RACK">مسطحة</option><option value="TANK">صهريج</option><option value="OTHER">أخرى</option></select></label>
+              <label class="field">رقم الرصاص الملاحي<input name="sealNumber" maxlength="64"></label>
+              <label class="field">اسم الباخرة<input name="vesselName" maxlength="120"></label>
+              <label class="field">اسم الميناء<input name="portName" required maxlength="120"></label>
+              <label class="field">مدينة الميناء<input name="portCity" required maxlength="120"></label>
+              <label class="field">حالة الفسح<select name="status" required><option value="CLEARED">مفسوح</option><option value="PENDING">قيد الإجراء</option><option value="ON_HOLD">معلق</option><option value="REJECTED">مرفوض</option></select></label>
+              <label class="field">تاريخ الفسح<input name="clearedAt" type="date"></label>
+              <button class="button button-primary" type="submit">حفظ بيانات الفسح</button>
+              <p class="search-hint full-field">هذه بيانات مدخلة يدوياً ولا يتم التحقق منها لدى منصة فسح.</p>
+            </form>
+          </div>
+          <section class="panel search-panel"><form id="fasah-search-form" class="search-form"><label class="search-input-wrap"><span>⌕</span><input id="fasah-query" type="search" placeholder="أدخل رقم البيان الجمركي أو رقم الحاوية" autocomplete="off" required></label><button class="button button-primary" type="submit">بحث</button></form><div class="search-hint"><span>ⓘ</span> البحث يعرض السجلات المحفوظة يدوياً في قاعدة بيانات الشركة.</div></section>
+          <div id="fasah-results" class="result-list"></div>
+        </section>
+
+        <section class="view" id="view-issue">
+          <div class="page-heading"><div><span class="eyebrow">بيانات النقل</span><h1>تسجيل وثيقة ورحلة</h1><p>سجّل الرحلة ورقم وثيقة النقل الصادر خارجياً إن توفر.</p></div><span class="service-tag"><i class="health-dot warning"></i> إدخال يدوي</span></div>
+          <div class="issue-layout">
+            <form id="issue-form" class="panel issue-form">
+              <div class="form-section-title"><span class="step-number">١</span><div><h2>بيانات الفسح والحاوية</h2><p>اختر بياناً مفسوحاً مدخلاً يدوياً</p></div></div>
+              <div class="form-grid">
+                <label class="field full-field">البيان الجمركي<select id="issue-clearance" required><option value="">اختر بياناً مفسوحاً</option></select></label>
+                <div class="selected-clearance hidden" id="selected-clearance"></div>
+              </div>
+              <div class="form-section-title section-spaced"><span class="step-number">٢</span><div><h2>تفاصيل الرحلة</h2><p>بيانات السائق والعميل والتسليم</p></div></div>
+              <div class="form-grid">
+                <label class="field">الشاحنة<select id="issue-truck" required></select></label>
+                <label class="field">السائق<select id="issue-driver" required></select></label>
+                <label class="field">الشركة المستلمة<input id="issue-customer" required placeholder="مثال: شركة العميل"></label>
+                <label class="field">وجهة التسليم<input id="issue-destination" required placeholder="المدينة أو المستودع"></label>
+                <label class="field">موعد إعادة الحاوية الفارغة<input id="issue-return-date" type="date"></label>
+              </div>
+              <div class="form-section-title section-spaced"><span class="step-number">٣</span><div><h2>مرجع وثيقة النقل</h2><p>اختياري — أدخل الرقم والتاريخ من الوثيقة الصادرة خارج النظام</p></div></div>
+              <div class="form-grid">
+                <label class="field">رقم وثيقة النقل<input id="issue-manual-document-number" maxlength="80"></label>
+                <label class="field">تاريخ الوثيقة<input id="issue-manual-document-date" type="date"></label>
+              </div>
+              <div class="form-actions"><span class="form-note">الرقم المدخل يُحفظ كمرجع يدوي ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.</span><button class="button button-primary" type="submit"><span>＋</span> حفظ الرحلة</button></div>
+            </form>
+            <aside class="panel issue-aside"><div class="aside-icon">▤</div><h3>قبل حفظ الرحلة</h3><ul><li>تأكد من أن حالة الفسح المدخلة «مفسوح».</li><li>اختر شاحنة متاحة وسائقاً نشطاً.</li><li>أدخل بيانات العميل ووجهة التسليم بدقة.</li></ul><div class="aside-warning"><strong>تنويه</strong><p>إدخال رقم الوثيقة يدوي ولا يثبت صحته؛ لا يتم حالياً إصدار أو تنزيل PDF حكومي من النظام.</p></div></aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-fleet">
+          <div class="page-heading"><div><span class="eyebrow">إدارة الموارد</span><h1>الأسطول والسائقون</h1><p>إدارة سجلات الأسطول والسائقين المركزية.</p></div><button id="toggle-truck-form" class="button button-secondary">＋ إضافة شاحنة</button></div>
+          <div id="truck-form-wrap" class="panel inline-form-wrap hidden"><form id="truck-form" class="inline-form"><label class="field">رقم الأسطول<input name="fleetNumber" placeholder="TR-041" required></label><label class="field">رقم السيارة (حروف وأرقام)<input name="plateNumber" placeholder="ن ق ل 1240" required></label><label class="field">الرقم التسلسلي<input name="serialNumber" placeholder="رقم الهيكل" required></label><label class="field">الموديل<input name="model" placeholder="سنة الصنع / الطراز" required></label><label class="field">اسم السائق<select name="driverId" id="truck-driver" required></select></label><button class="button button-primary" type="submit">حفظ الشاحنة</button></form></div>
+          <section class="panel fleet-panel"><div class="panel-heading"><div><h2>السيارات والسائقون</h2><p><span id="truck-count">0</span> سيارة — رقم اللوحة والسائق والحالة</p></div><div class="fleet-panel-tools"><span id="truck-selection-count" class="selection-count hidden"></span><button id="delete-selected-trucks" class="button button-danger bulk-delete-button" type="button" disabled>حذف المحدد</button><button id="clear-selected-trucks" class="button button-light selection-clear hidden" type="button">إلغاء التحديد</button><label class="compact-search"><span>⌕</span><input id="truck-filter" type="search" placeholder="ابحث عن سيارة أو سائق"></label></div></div><div class="table-scroll"><table><thead><tr><th><input id="select-all-trucks" class="select-checkbox" type="checkbox" aria-label="تحديد السيارات الظاهرة"></th><th>رقم الأسطول</th><th>رقم السيارة (حروف وأرقام)</th><th>الرقم التسلسلي</th><th>الموديل</th><th>اسم السائق</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="truck-rows"></tbody></table></div></section>
+          <div class="page-heading subheading"><div><h2>السائقون</h2><p>قائمة السائقين المسجلين وحالة نشاطهم.</p></div><button id="toggle-driver-form" class="button button-secondary">＋ إضافة سائق</button></div>
+          <div id="driver-form-wrap" class="panel inline-form-wrap hidden"><form id="driver-form" class="inline-form"><label class="field">اسم السائق<input name="name" required placeholder="اسم السائق"></label><label class="field">رقم الهوية / الإقامة<input name="nationalId" required placeholder="رقم الهوية"></label><label class="field">رقم الجوال<input name="phone" required placeholder="05xxxxxxxx"></label><label class="field">رقم الرخصة<input name="licenseNumber" required placeholder="رقم الرخصة"></label><button class="button button-primary" type="submit">حفظ السائق</button></form></div>
+          <section class="panel fleet-panel"><div class="panel-heading"><div><h2>السائقون</h2><p><span id="driver-count">0</span> سائقاً مسجلاً</p></div><div class="fleet-panel-tools"><span id="driver-selection-count" class="selection-count hidden"></span><button id="delete-selected-drivers" class="button button-danger bulk-delete-button" type="button" disabled>حذف المحدد</button><button id="clear-selected-drivers" class="button button-light selection-clear hidden" type="button">إلغاء التحديد</button><label class="compact-search"><span>⌕</span><input id="driver-filter" type="search" placeholder="ابحث عن سائق"></label></div></div><div class="table-scroll"><table><thead><tr><th><input id="select-all-drivers" class="select-checkbox" type="checkbox" aria-label="تحديد السائقين الظاهرين"></th><th>الاسم</th><th>رقم الهوية / الإقامة</th><th>الجوال</th><th>الرخصة</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody id="driver-rows"></tbody></table></div></section>
+        </section>
+
+        <section class="view" id="view-archive">
+          <div class="page-heading"><div><span class="eyebrow">المستندات</span><h1>أرشيف الوثائق</h1><p>ابحث برقم البيان أو الحاوية أو الوثيقة أو لوحة الشاحنة.</p></div><span class="archive-count" id="archive-count">0 وثيقة</span></div>
+          <section class="panel search-panel"><label class="search-input-wrap"><span>⌕</span><input id="archive-query" type="search" placeholder="ابحث في الأرشيف..." autocomplete="off"></label><div class="search-hint">تظهر الوثائق وطلبات الرحلات المحفوظة في قاعدة بيانات الشركة.</div></section>
+          <div id="archive-results" class="result-list"></div>
+        </section>
+
+        <section class="view" id="view-reports">
+          <div class="page-heading"><div><span class="eyebrow">تحليل العمليات</span><h1>التقارير والتصدير</h1><p>تصفية تفاصيل الفسح ووثائق النقل وعودة الحاويات الفارغة.</p></div><button id="export-excel" class="button button-green"><span>⇩</span> تصدير إلى Excel</button></div>
+          <section class="panel filters-panel"><div class="filters-grid"><label class="field">من تاريخ<input id="filter-from" type="date"></label><label class="field">إلى تاريخ<input id="filter-to" type="date"></label><label class="field">الميناء<select id="filter-port"><option value="">كل الموانئ</option></select></label><label class="field">الشركة<input id="filter-customer" placeholder="اسم الشركة"></label><label class="field">حالة عودة الفارغ<select id="filter-return"><option value="">كل الحالات</option><option value="returned">تمت الإعادة</option><option value="soon">تقترب المهلة</option><option value="overdue">متأخرة</option><option value="active">ضمن المهلة</option></select></label><button id="clear-filters" class="button button-light">مسح الفلاتر</button></div></section>
+          <section class="panel report-panel"><div class="panel-heading"><div><h2>سجل العمليات</h2><p id="report-count">0 عملية</p></div><span class="report-hint">تُحدّث النتائج تلقائياً حسب الفلاتر</span></div><div class="table-scroll report-scroll"><table class="report-table"><thead><tr><th>تاريخ العملية / الفسح</th><th>الشركة المستلمة</th><th>السائق وبياناته</th><th>وثيقة بيان</th><th>الشاحنة</th><th>الحاوية والتفاصيل</th><th>المسار</th><th>عودة الفارغ / EIR</th></tr></thead><tbody id="report-rows"></tbody></table></div><div id="report-empty" class="empty-state hidden"><span>⌕</span><strong>لا توجد نتائج مطابقة</strong><p>جرّب تغيير الفلاتر أو مسحها.</p></div></section>
+        </section>
+
+        <section class="view" id="view-accounts">
+          <div class="page-heading"><div><span class="eyebrow">إدارة الصلاحيات</span><h1>حسابات المستخدمين</h1><p>إنشاء حسابات الأدمن والسائقين وإدارة تسجيل الدخول.</p></div></div>
+          <div class="account-layout">
+            <section class="panel account-create-panel">
+              <div class="panel-heading"><div><h2 id="account-form-title">إضافة حساب</h2><p>كلمات المرور تحفظ كتجزئة ولا تظهر في الجدول.</p></div></div>
+              <form id="account-form" class="account-form">
+                <label class="field">نوع الحساب<select id="account-role" name="role" required><option value="DRIVER">سائق</option><option value="ADMIN">أدمن</option></select></label>
+                <label class="field">اسم المستخدم<input name="username" required minlength="3" autocomplete="off" placeholder="اسم مستخدم فريد"></label>
+                <label id="account-driver-field" class="field">ربط بسجل السائق<select id="account-driver" name="driverId"></select></label>
+                <label id="account-password-label" class="field"><span id="account-password-title">كلمة المرور</span><input name="password" type="password" required minlength="12" autocomplete="new-password" placeholder="١٢ حرفاً على الأقل"></label>
+                <label id="account-password-confirm-label" class="field"><span id="account-password-confirm-title">تأكيد كلمة المرور</span><input name="passwordConfirm" type="password" required minlength="12" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور"></label>
+                <div id="account-form-actions" class="account-form-actions"><button id="account-submit-button" class="button button-primary" type="submit">إنشاء الحساب</button><button id="cancel-account-edit" class="button button-light hidden" type="button">إلغاء التعديل</button></div>
+              </form>
+              <div class="account-security-note">استخدم كلمة مرور مختلفة لكل مستخدم. تُخزّن كلمات المرور مجزأة على الخادم.</div>
+            </section>
+            <section class="panel account-list-panel">
+              <div class="panel-heading"><div><h2>الحسابات المسجلة</h2><p id="account-count">0 حساب</p></div></div>
+              <div class="table-scroll"><table><thead><tr><th>اسم المستخدم</th><th>نوع الحساب</th><th>السائق المرتبط</th><th>تاريخ الإنشاء</th><th>إجراءات</th></tr></thead><tbody id="account-rows"></tbody></table></div>
+            </section>
+          </div>
+        </section>
+      </main>
+      <footer class="footer"><span>عالم الشمال لإدارة النقل</span><span>تشغيل مركزي عبر خادم الشركة</span></footer>
+    </div>
+  </div>
+
+  <div id="driver-app" class="driver-app hidden">
+    <header class="driver-topbar">
+      <a class="brand" href="#" aria-label="عالم الشمال"><span class="brand-mark">ع</span><span><strong>عالم الشمال</strong><small>بوابة السائق</small></span></a>
+      <div class="driver-session"><span class="driver-avatar">س</span><span><strong id="driver-user-name"></strong><small id="driver-display-name"></small></span><button class="language-toggle" type="button" data-language-toggle>English</button><button id="driver-logout" class="logout-button" type="button">تسجيل الخروج</button></div>
+    </header>
+    <main class="driver-content">
+      <div class="page-heading"><div><span class="eyebrow">مساحة السائق</span><h1>رحلاتي</h1><p>الرحلات والوثائق المرتبطة بحسابك فقط.</p></div><span class="service-tag"><i class="health-dot good"></i> حساب سائق</span></div>
+      <nav class="driver-tabs" aria-label="أقسام السائق">
+        <button class="driver-tab-button active" type="button" data-driver-tab="requests">الطلبات <span id="driver-request-count">0</span></button>
+        <button class="driver-tab-button" type="button" data-driver-tab="trips">رحلاتي</button>
+      </nav>
+      <section id="driver-requests-panel" class="driver-tab-panel active">
+        <div id="driver-request-list" class="driver-request-list"></div>
+      </section>
+      <section id="driver-trips-panel" class="driver-tab-panel">
+        <div class="stats-grid driver-stats">
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon blue">▤</span><span class="stat-caption">إجمالي الرحلات</span></div><div class="stat-value" id="driver-stat-total">0</div><div class="stat-foot"><span>الوثائق المرتبطة بحسابك</span></div></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon amber">⌖</span><span class="stat-caption">رحلات قيد التنفيذ</span></div><div class="stat-value" id="driver-stat-active">0</div><div class="stat-foot"><span>بانتظار إعادة الحاوية</span></div></article>
+          <article class="stat-card"><div class="stat-top"><span class="stat-icon green">✓</span><span class="stat-caption">رحلات مكتملة</span></div><div class="stat-value" id="driver-stat-complete">0</div><div class="stat-foot"><span>تم تسجيل عودة الفارغ</span></div></article>
+        </div>
+        <section class="panel driver-trips-panel">
+          <div class="panel-heading"><div><h2>الرحلات والوثائق</h2><p>تواصل مع الإدارة عند وجود اختلاف في بيانات الرحلة.</p></div></div>
+          <div id="driver-trip-list" class="driver-trip-list"></div>
+        </section>
+      </section>
+      <p class="driver-demo-note">تُحفظ تحديثات الرحلة على خادم الشركة. لا تمثل هذه التحديثات إصداراً حكومياً.</p>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
