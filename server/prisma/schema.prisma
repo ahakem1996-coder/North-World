@@ -107,7 +107,8 @@ model Driver {
   name         String
   nationalId   String   @unique
   phone        String
-  licenseNumber String  @unique
+  passportNumber String?  @unique
+  licenseNumber  String?  @unique
   isActive     Boolean  @default(true)
   deletedAt    DateTime?
   createdAt    DateTime @default(now())

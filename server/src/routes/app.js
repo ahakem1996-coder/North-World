@@ -89,6 +89,10 @@ function mapTrip(trip) {
     requestStatus: trip.driverAcceptedAt ? "ACCEPTED" : "PENDING",
     acceptedAt: trip.driverAcceptedAt?.toISOString() || "",
     tripStageIndex: completed ? tripStages.length - 1 : trip.driverAcceptedAt ? Math.max(0, stageIndex) : -1,
+    stageHistory: trip.stageUpdates.map(update => ({
+      stage: update.stage,
+      completedAt: update.completedAt.toISOString()
+    })),
     returnedAt: trip.emptyReturnedAt?.toISOString().slice(0, 10) || "",
     eir: trip.eirReceiptNumber || "",
     clearanceAttachments: (trip.customsClearance.attachments || []).map(attachmentMetadata),
@@ -115,7 +119,7 @@ function stateDriver(driver) {
     name: driver.name,
     nationalId: driver.nationalId,
     phone: driver.phone,
-    licenseNumber: driver.licenseNumber,
+    passportNumber: driver.passportNumber,
     isActive: driver.isActive,
     deletedAt: driver.deletedAt?.toISOString() || null
   };
@@ -270,14 +274,15 @@ router.post("/trucks", requireAdmin, async (req, res) => {
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_truck_input" });
+  const { driverId, ...truckData } = parsed.data;
   const driver = await prisma.driver.findFirst({
-    where: { id: parsed.data.driverId, isActive: true, deletedAt: null }
+    where: { id: driverId, isActive: true, deletedAt: null }
   });
   if (!driver) return res.status(400).json({ error: "active_driver_required" });
 
   const truck = await prisma.$transaction(async tx => {
     const created = await tx.truck.create({
-      data: { ...parsed.data, assignedDriverId: driver.id }
+      data: { ...truckData, assignedDriverId: driver.id }
     });
     await writeAudit(tx, req, "truck.created", "Truck", created.id);
     return created;
@@ -287,6 +292,10 @@ router.post("/trucks", requireAdmin, async (req, res) => {
 
 router.patch("/trucks/:id", requireAdmin, async (req, res) => {
   const schema = z.object({
+    fleetNumber: z.string().trim().min(1).max(32).optional(),
+    plateNumber: z.string().trim().min(1).max(32).optional(),
+    serialNumber: z.string().trim().min(1).max(64).optional(),
+    model: z.string().trim().min(1).max(80).optional(),
     status: z.enum(truckStatuses).optional(),
     driverId: z.string().nullable().optional()
   }).refine(value => Object.keys(value).length > 0);
@@ -295,6 +304,24 @@ router.patch("/trucks/:id", requireAdmin, async (req, res) => {
 
   const truck = await prisma.$transaction(async tx => {
     const current = await tx.truck.findUniqueOrThrow({ where: { id: req.params.id } });
+    if (current.deletedAt) {
+      throw Object.assign(new Error("record_not_found"), { statusCode: 404, publicCode: "record_not_found" });
+    }
+    const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
+    if (identityFields.some(field => parsed.data[field] !== undefined)) {
+      const duplicate = await tx.truck.findFirst({
+        where: {
+          id: { not: current.id },
+          OR: identityFields
+            .filter(field => parsed.data[field] !== undefined)
+            .map(field => ({ [field]: parsed.data[field] }))
+        },
+        select: { id: true }
+      });
+      if (duplicate) {
+        throw Object.assign(new Error("truck_details_conflict"), { statusCode: 409, publicCode: "truck_details_conflict" });
+      }
+    }
     const activeTrip = await tx.trip.findFirst({
       where: { truckId: current.id, ...ACTIVE_TRIP_FILTER },
       select: { id: true }
@@ -319,6 +346,10 @@ router.patch("/trucks/:id", requireAdmin, async (req, res) => {
     const updated = await tx.truck.update({
       where: { id: current.id },
       data: {
+        ...(parsed.data.fleetNumber !== undefined ? { fleetNumber: parsed.data.fleetNumber } : {}),
+        ...(parsed.data.plateNumber !== undefined ? { plateNumber: parsed.data.plateNumber } : {}),
+        ...(parsed.data.serialNumber !== undefined ? { serialNumber: parsed.data.serialNumber } : {}),
+        ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
         ...(parsed.data.status ? { status: parsed.data.status } : {}),
         ...(parsed.data.driverId !== undefined ? { assignedDriverId } : {})
       }
@@ -376,7 +407,7 @@ router.post("/drivers", requireAdmin, async (req, res) => {
     name: z.string().trim().min(1).max(120),
     nationalId: z.string().trim().min(1).max(32),
     phone: z.string().trim().min(1).max(32),
-    licenseNumber: z.string().trim().min(1).max(64)
+    passportNumber: z.string().trim().min(1).max(64)
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_driver_input" });
@@ -387,6 +418,41 @@ router.post("/drivers", requireAdmin, async (req, res) => {
     return created;
   });
   res.status(201).json(stateDriver(driver));
+});
+
+router.patch("/drivers/:id", requireAdmin, async (req, res) => {
+  const schema = z.object({
+    name: z.string().trim().min(1).max(120),
+    nationalId: z.string().trim().min(1).max(32),
+    phone: z.string().trim().min(1).max(32),
+    passportNumber: z.string().trim().min(1).max(64)
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_driver_input" });
+
+  const driver = await prisma.$transaction(async tx => {
+    const current = await tx.driver.findUniqueOrThrow({ where: { id: req.params.id } });
+    if (current.deletedAt) {
+      throw Object.assign(new Error("record_not_found"), { statusCode: 404, publicCode: "record_not_found" });
+    }
+    const duplicate = await tx.driver.findFirst({
+      where: {
+        id: { not: current.id },
+        OR: [
+          { nationalId: parsed.data.nationalId },
+          { passportNumber: parsed.data.passportNumber }
+        ]
+      },
+      select: { id: true }
+    });
+    if (duplicate) {
+      throw Object.assign(new Error("driver_details_conflict"), { statusCode: 409, publicCode: "driver_details_conflict" });
+    }
+    const updated = await tx.driver.update({ where: { id: current.id }, data: parsed.data });
+    await writeAudit(tx, req, "driver.updated", "Driver", updated.id);
+    return updated;
+  });
+  res.json(stateDriver(driver));
 });
 
 async function softDeleteDriver(req, driverId, tx = prisma) {

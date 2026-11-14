@@ -21,6 +21,8 @@ Express serves the browser interface from `client/` and the API from the same or
 
 Administrators can enter clearance details and attach supporting clearance and transport-document files (PDF, JPG, or PNG; up to four files and 8 MB total per entry). Attachments are stored in PostgreSQL and can be downloaded from the clearance results and document archive. Uploaded files and manually entered document references are not verified by Fasah or other government platforms; the application does not issue government documents.
 
+The administrator's trip-tracking screen shows accepted trips, driver-reported milestones, and their timestamps. It refreshes every 30 seconds while open; it does not provide live GPS tracking.
+
 The app is not yet deployed or connected to government APIs. The database starts empty; enter the company's real truck, driver, port, and account records before operations.
 
 ## VPS templates

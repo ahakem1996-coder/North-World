@@ -16,6 +16,29 @@ const TRANSLATIONS = Object.freeze({
   "إصدار وثيقة نقل": "Issue Transport Document",
   "إصدار وثيقة": "Issue Document",
   "الأسطول والسائقون": "Fleet & Drivers",
+  "تتبع الرحلات": "Trip Tracking",
+  "تتبع رحلات السائقين": "Driver Trip Tracking",
+  "متابعة الأسطول": "Fleet Tracking",
+  "تابع الرحلات بعد قبول السائق وتحديث مراحلها. لا تعرض هذه الشاشة موقع GPS مباشراً.": "Track trips after the driver accepts them and records stage updates. This screen does not show live GPS location.",
+  "تحديث الآن": "Refresh now",
+  "اختر الميناء": "Select a port",
+  "ميناء الملك عبدالله": "King Abdullah Port",
+  "الدمام": "Dammam",
+  "بعد قبول السائق": "After driver acceptance",
+  "تمت إعادة الفارغ": "Empty container returned",
+  "آخر تحديث للبيانات": "Last Data Refresh",
+  "تحديث تلقائي كل 30 ثانية عند فتح الشاشة": "Auto-refresh every 30 seconds while this screen is open",
+  "عرض الرحلات": "Show Trips",
+  "كل الرحلات المقبولة": "All accepted trips",
+  "ابحث عن سائق أو شاحنة أو حاوية": "Search by driver, truck, or container",
+  "لا توجد رحلات مقبولة تطابق البحث أو الفلتر.": "No accepted trips match this search or filter.",
+  "المرحلة الحالية": "Current Stage",
+  "آخر تحديث": "Last update",
+  "قُبل الطلب في": "Request accepted",
+  "البيان:": "Declaration:",
+  "الحاوية:": "Container:",
+  "المسار": "Route",
+  "تم تحديث تتبع الرحلات.": "Trip tracking refreshed.",
   "أرشيف الوثائق": "Document Archive",
   "التقارير والتصدير": "Reports & Export",
   "حسابات المستخدمين": "User Accounts",
@@ -200,6 +223,8 @@ const TRANSLATIONS = Object.freeze({
   "حالة ": "Status ",
   "حذف السيارة ": "Delete truck ",
   "حذف السائق ": "Delete driver ",
+  "تعديل السيارة ": "Edit truck ",
+  "تعديل السائق ": "Edit driver ",
   "رقم السيارة (حروف وأرقام)": "Vehicle Plate (Letters & Numbers)",
   "الرقم التسلسلي": "Serial Number",
   "رقم الهيكل": "Chassis Number",
@@ -219,14 +244,14 @@ const TRANSLATIONS = Object.freeze({
   "رقم الهوية / الإقامة": "National ID / Residency",
   "رقم الهوية": "ID Number",
   "رقم الجوال": "Mobile Number",
-  "رقم الرخصة": "License Number",
+  "رقم جواز السفر": "Passport Number",
   "05xxxxxxxx": "05xxxxxxxx",
   "حفظ السائق": "Save Driver",
   "سائقاً مسجلاً": "registered drivers",
   "تحديد السائقين الظاهرين": "Select visible drivers",
   "الاسم": "Name",
   "الجوال": "Mobile",
-  "الرخصة": "License",
+  "جواز السفر": "Passport",
   "غير معيّن": "Unassigned",
   "غير نشط": "Inactive",
   "غير نشطة": "Inactive",
@@ -379,7 +404,7 @@ const TRANSLATIONS = Object.freeze({
   "مستودع الجبيل": "Jubail Warehouse",
   "سائق تجريبي": "Demo Driver",
   "هوية تجريبية": "Demo ID",
-  "رخصة تجريبية": "Demo License",
+  "جواز تجريبي": "Demo Passport",
   "تأخرت": "Overdue",
   "تمت الإعادة ": "Returned ",
   "متأخرة · الاستحقاق": "Overdue · Due",
@@ -527,9 +552,13 @@ const TRANSLATIONS = Object.freeze({
   "عمليات": "operations",
   "اختر سائقاً نشطاً للسيارة.": "Select an active driver for this truck.",
   "رقم الأسطول أو اللوحة أو الرقم التسلسلي مسجل مسبقاً.": "Fleet number, plate, or serial number is already registered.",
+  "بيانات الشاحنة مسجلة مسبقاً.": "Truck details are already registered.",
   "تمت إضافة الشاحنة.": "Truck added.",
-  "رقم الهوية أو الرخصة مسجل مسبقاً.": "ID or license number is already registered.",
+  "رقم الهوية أو جواز السفر مسجل مسبقاً.": "ID or passport number is already registered.",
+  "بيانات السائق مسجلة مسبقاً.": "Driver details are already registered.",
   "تمت إضافة السائق.": "Driver added.",
+  "تم تحديث بيانات الشاحنة.": "Truck details updated.",
+  "تم تحديث بيانات السائق.": "Driver details updated.",
   "يتطلب النظام اتصالاً بخادم الشركة. لا تُحفظ بيانات العمل على هذا الجهاز.": "A connection to the company server is required. Business data is not stored on this device.",
   "بيانات مركزية آمنة": "Secure central data",
   "تُحفظ العمليات على خادم الشركة.": "Operations are stored on the company server.",
@@ -594,13 +623,13 @@ const TRUCK_STATUSES = {
   INACTIVE: { label: "غير نشطة", className: "status-neutral" }
 };
 const TRIP_STAGES = [
-  { label: "في الطريق إلى الميناء", action: "تأكيد استلام الحاوية" },
-  { label: "تم استلام الحاوية", action: "تأكيد الانطلاق إلى العميل" },
-  { label: "في الطريق للعميل", action: "تأكيد الوصول إلى العميل" },
-  { label: "تم الوصول إلى العميل", action: "تأكيد تسليم الحاوية" },
-  { label: "تم التسليم", action: "تأكيد بدء العودة" },
-  { label: "في الطريق للعودة", action: "تأكيد إعادة الفارغ" },
-  { label: "تم إعادة الفارغ", action: "" }
+  { key: "EN_ROUTE_TO_PORT", label: "في الطريق إلى الميناء", action: "تأكيد استلام الحاوية" },
+  { key: "CONTAINER_PICKED_UP", label: "تم استلام الحاوية", action: "تأكيد الانطلاق إلى العميل" },
+  { key: "EN_ROUTE_TO_CUSTOMER", label: "في الطريق للعميل", action: "تأكيد الوصول إلى العميل" },
+  { key: "ARRIVED_AT_CUSTOMER", label: "تم الوصول إلى العميل", action: "تأكيد تسليم الحاوية" },
+  { key: "DELIVERED", label: "تم التسليم", action: "تأكيد بدء العودة" },
+  { key: "RETURNING_EMPTY", label: "في الطريق للعودة", action: "تأكيد إعادة الفارغ" },
+  { key: "EMPTY_RETURNED", label: "تم إعادة الفارغ", action: "" }
 ];
 const CONTAINER_TYPES = {
   DRY: "جافة",
@@ -609,6 +638,11 @@ const CONTAINER_TYPES = {
   FLAT_RACK: "مسطحة",
   TANK: "صهريج",
   OTHER: "أخرى"
+};
+const PORT_CITIES = {
+  "ميناء جدة الإسلامي": "جدة",
+  "ميناء الملك عبدالله": "مدينة الملك عبدالله الاقتصادية",
+  "الدمام": "الدمام"
 };
 const CLEARANCE_LABELS = {
   CLEARED: { text: "مفسوح", className: "status-issued" },
@@ -635,7 +669,11 @@ let toastTimer;
 let currentAccount = null;
 let fasahSearchSequence = 0;
 let editingAccountId = null;
+let editingTruckId = null;
+let editingDriverId = null;
 let activeDriverTab = "requests";
+let trackingLastUpdatedAt = null;
+let trackingRefreshInFlight = false;
 const selectedTruckIds = new Set();
 const selectedDriverIds = new Set();
 
@@ -715,6 +753,16 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(date);
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const locale = language === "ar" ? "ar-SA-u-ca-gregory" : "en-GB";
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+  }).format(date);
+}
+
 function showToast(message, isError = false) {
   const toast = $("#toast");
   toast.textContent = translateText(message);
@@ -739,6 +787,8 @@ const API_ERRORS = {
   setup_already_complete: "تم إنشاء حساب المدير الأول مسبقاً.",
   record_already_exists: "توجد بيانات مسجلة بهذه القيمة مسبقاً.",
   record_not_found: "السجل المطلوب غير موجود.",
+  truck_details_conflict: "بيانات الشاحنة مسجلة مسبقاً.",
+  driver_details_conflict: "بيانات السائق مسجلة مسبقاً.",
   truck_has_active_trip: "لا يمكن تعديل الشاحنة أو حذفها لارتباطها برحلة نشطة.",
   driver_has_active_trip: "لا يمكن حذف السائق لارتباطه برحلة نشطة.",
   active_driver_required: "اختر سائقاً نشطاً.",
@@ -829,12 +879,14 @@ function renderAttachmentLinks(attachments, label = "المرفقات المحف
 
 async function refreshServerState() {
   state = await apiRequest("/api/app-state");
+  trackingLastUpdatedAt = new Date();
   renderDashboard();
   renderFasahResults($("#fasah-query").value);
   renderFleet();
   renderDrivers();
   populateTruckDriverOptions();
   populateIssueOptions($("#issue-clearance").value);
+  renderTripTracking();
   renderArchive($("#archive-query").value);
   renderReports();
   if (currentAccount?.role === "ADMIN") renderAccounts();
@@ -1061,6 +1113,7 @@ function switchView(name) {
     fasah: "استعلام الفسح",
     issue: "إصدار وثيقة نقل",
     fleet: "الأسطول والسائقون",
+    tracking: "تتبع الرحلات",
     archive: "أرشيف الوثائق",
     reports: "التقارير والتصدير",
     accounts: "حسابات المستخدمين"
@@ -1071,6 +1124,7 @@ function switchView(name) {
   if (name === "fasah") renderFasahResults($("#fasah-query").value);
   if (name === "issue") populateIssueOptions();
   if (name === "fleet") { renderFleet(); renderDrivers(); }
+  if (name === "tracking") renderTripTracking();
   if (name === "archive") renderArchive($("#archive-query").value);
   if (name === "reports") renderReports();
   if (name === "accounts") renderAccounts();
@@ -1186,7 +1240,7 @@ function renderFleet() {
     <td>${escapeHtml(item.fleetNumber)}</td><td>${escapeHtml(item.plateNumber)}</td><td>${escapeHtml(item.serialNumber)}</td><td>${escapeHtml(item.model)}</td>
     <td><select class="truck-driver" data-id="${escapeHtml(item.id)}" aria-label="السائق المعيّن للسيارة ${escapeHtml(item.plateNumber)}"><option value="">غير معيّن</option>${state.drivers.filter(driver => !driver.deletedAt).map(driver => `<option value="${escapeHtml(driver.id)}" ${item.driverId === driver.id ? "selected" : ""}>${escapeHtml(driver.name)}${driver.isActive ? "" : " (غير نشط)"}</option>`).join("")}</select></td>
     <td><select class="truck-status" data-id="${escapeHtml(item.id)}" aria-label="حالة ${escapeHtml(item.fleetNumber)}">${Object.entries(TRUCK_STATUSES).map(([key, status]) => `<option value="${key}" ${item.status === key ? "selected" : ""}>${status.label}</option>`).join("")}</select></td>
-    <td><button class="delete-button" type="button" data-action="delete-truck" data-id="${escapeHtml(item.id)}" aria-label="حذف السيارة ${escapeHtml(item.plateNumber)}">حذف</button></td>
+    <td><div class="row-actions"><button class="edit-account-button" type="button" data-action="edit-truck" data-id="${escapeHtml(item.id)}" aria-label="تعديل السيارة ${escapeHtml(item.plateNumber)}">تعديل</button><button class="delete-button" type="button" data-action="delete-truck" data-id="${escapeHtml(item.id)}" aria-label="حذف السيارة ${escapeHtml(item.plateNumber)}">حذف</button></div></td>
   </tr>`).join("") : `<tr><td colspan="8" class="empty-row">لا توجد سيارات مطابقة.</td></tr>`;
   updateBulkControls("trucks", filtered.map(item => item.id));
 }
@@ -1204,13 +1258,13 @@ function populateTruckDriverOptions() {
 function renderDrivers() {
   const term = $("#driver-filter").value.trim().toLowerCase();
   const activeDrivers = state.drivers.filter(item => !item.deletedAt);
-  const filtered = activeDrivers.filter(item => [item.name, item.nationalId, item.phone, item.licenseNumber].some(value => value.toLowerCase().includes(term)));
+  const filtered = activeDrivers.filter(item => [item.name, item.nationalId, item.phone, item.passportNumber || ""].some(value => value.toLowerCase().includes(term)));
   $("#driver-count").textContent = activeDrivers.length;
   $("#driver-rows").innerHTML = filtered.length ? filtered.map(item => `<tr>
     <td><input class="select-checkbox driver-select" type="checkbox" data-id="${escapeHtml(item.id)}" aria-label="تحديد السائق ${escapeHtml(item.name)}" ${selectedDriverIds.has(item.id) ? "checked" : ""}></td>
-    <td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.nationalId)}</td><td>${escapeHtml(item.phone)}</td><td>${escapeHtml(item.licenseNumber)}</td>
+    <td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.nationalId)}</td><td>${escapeHtml(item.phone)}</td><td>${escapeHtml(item.passportNumber || "—")}</td>
     <td><span class="status-pill ${item.isActive ? "status-available" : "status-neutral"}">${item.isActive ? "نشط" : "غير نشط"}</span></td>
-    <td><button class="delete-button" type="button" data-action="delete-driver" data-id="${escapeHtml(item.id)}" aria-label="حذف السائق ${escapeHtml(item.name)}">حذف</button></td>
+    <td><div class="row-actions"><button class="edit-account-button" type="button" data-action="edit-driver" data-id="${escapeHtml(item.id)}" aria-label="تعديل السائق ${escapeHtml(item.name)}">تعديل</button><button class="delete-button" type="button" data-action="delete-driver" data-id="${escapeHtml(item.id)}" aria-label="حذف السائق ${escapeHtml(item.name)}">حذف</button></div></td>
   </tr>`).join("") : `<tr><td colspan="7" class="empty-row">لا يوجد سائقون مطابقون.</td></tr>`;
   updateBulkControls("drivers", filtered.map(item => item.id));
 }
@@ -1239,6 +1293,7 @@ async function deleteTruck(id) {
   if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber}؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
   try {
     await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (editingTruckId === id) cancelTruckEdit();
     selectedTruckIds.delete(id);
     await refreshServerState();
     showToast("تم حذف السيارة من قائمة الأسطول مع الاحتفاظ بوثائقها السابقة.");
@@ -1247,18 +1302,72 @@ async function deleteTruck(id) {
   }
 }
 
+function beginTruckEdit(id) {
+  const truck = truckById(id);
+  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
+  if (editingDriverId) cancelDriverEdit();
+  const form = $("#truck-form");
+  editingTruckId = truck.id;
+  form.reset();
+  populateTruckDriverOptions();
+  form.elements.fleetNumber.value = truck.fleetNumber;
+  form.elements.plateNumber.value = truck.plateNumber;
+  form.elements.serialNumber.value = truck.serialNumber;
+  form.elements.model.value = truck.model;
+  form.elements.driverId.value = truck.driverId;
+  $("#truck-submit-button").textContent = "حفظ التعديلات";
+  $("#cancel-truck-edit").classList.remove("hidden");
+  $("#truck-form-wrap").classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelTruckEdit() {
+  editingTruckId = null;
+  $("#truck-form").reset();
+  $("#truck-submit-button").textContent = "حفظ الشاحنة";
+  $("#cancel-truck-edit").classList.add("hidden");
+  $("#truck-form-wrap").classList.add("hidden");
+  populateTruckDriverOptions();
+}
+
 async function deleteDriver(id) {
   const driver = driverById(id);
   if (!driver || driver.deletedAt) return;
   if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
   try {
     await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (editingDriverId === id) cancelDriverEdit();
     selectedDriverIds.delete(id);
     await refreshServerState();
     showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
   } catch (error) {
     showToast(error.message, true);
   }
+}
+
+function beginDriverEdit(id) {
+  const driver = driverById(id);
+  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
+  if (editingTruckId) cancelTruckEdit();
+  const form = $("#driver-form");
+  editingDriverId = driver.id;
+  form.reset();
+  form.elements.name.value = driver.name;
+  form.elements.nationalId.value = driver.nationalId;
+  form.elements.phone.value = driver.phone;
+  form.elements.passportNumber.value = driver.passportNumber || "";
+  $("#driver-submit-button").textContent = "حفظ التعديلات";
+  $("#cancel-driver-edit").classList.remove("hidden");
+  $("#driver-form-wrap").classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelDriverEdit() {
+  editingDriverId = null;
+  $("#driver-form").reset();
+  $("#driver-submit-button").textContent = "حفظ السائق";
+  $("#cancel-driver-edit").classList.add("hidden");
+  $("#driver-form-wrap").classList.add("hidden");
 }
 
 async function deleteSelectedTrucks() {
@@ -1270,6 +1379,7 @@ async function deleteSelectedTrucks() {
       method: "POST",
       body: { ids: selected.map(item => item.id) }
     });
+    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
     result.deleted.forEach(id => selectedTruckIds.delete(id));
     await refreshServerState();
     showToast(`تم حذف ${result.deleted.length} سيارة.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
@@ -1287,6 +1397,7 @@ async function deleteSelectedDrivers() {
       method: "POST",
       body: { ids: selected.map(item => item.id) }
     });
+    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
     result.deleted.forEach(id => selectedDriverIds.delete(id));
     await refreshServerState();
     showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
@@ -1332,6 +1443,98 @@ function renderArchive(query = "") {
       <div class="archive-actions"><button class="button button-secondary" data-action="pdf" data-id="${escapeHtml(doc.id)}">عرض / PDF</button>${doc.returnedAt ? "" : `<label class="eir-field">رقم إيصال EIR (اختياري)<input type="text" data-return-eir autocomplete="off"></label>`}<button class="button button-light" data-action="return" data-id="${escapeHtml(doc.id)}" ${doc.returnedAt ? "disabled" : ""}>تسجيل الإعادة</button></div>
     </article>`;
   }).join("");
+}
+
+function renderTripTracking() {
+  const acceptedTrips = state.docs.filter(doc => Boolean(doc.acceptedAt));
+  const activeTrips = acceptedTrips.filter(doc => !doc.returnedAt);
+  const completedTrips = acceptedTrips.filter(doc => Boolean(doc.returnedAt));
+  $("#tracking-active-count").textContent = activeTrips.length;
+  $("#tracking-completed-count").textContent = completedTrips.length;
+  $("#tracking-last-updated").textContent = formatDateTime(trackingLastUpdatedAt);
+
+  const statusFilter = $("#tracking-filter").value;
+  const query = $("#tracking-query").value.trim().toLocaleLowerCase();
+  const trips = acceptedTrips.filter(doc => {
+    if (statusFilter === "active" && doc.returnedAt) return false;
+    if (statusFilter === "completed" && !doc.returnedAt) return false;
+    const driver = driverById(doc.driverId);
+    const truck = truckById(doc.truckId);
+    const searchable = [
+      doc.documentNumber, doc.declarationNumber, doc.containerNumber,
+      doc.customerName, doc.port, doc.destination, driver?.name,
+      driver?.phone, truck?.plateNumber, truck?.fleetNumber
+    ];
+    return !query || searchable.some(value => String(value || "").toLocaleLowerCase().includes(query));
+  }).sort((a, b) => {
+    const aUpdatedAt = a.stageHistory?.[a.stageHistory.length - 1]?.completedAt || a.acceptedAt;
+    const bUpdatedAt = b.stageHistory?.[b.stageHistory.length - 1]?.completedAt || b.acceptedAt;
+    return String(bUpdatedAt).localeCompare(String(aUpdatedAt));
+  });
+
+  const container = $("#tracking-list");
+  if (!trips.length) {
+    container.innerHTML = translateText(`<div class="panel empty-state"><span>⌖</span><strong>لا توجد رحلات مقبولة تطابق البحث أو الفلتر.</strong></div>`);
+    return;
+  }
+
+  container.innerHTML = trips.map(doc => {
+    const driver = driverById(doc.driverId);
+    const truck = truckById(doc.truckId);
+    const stageHistory = new Map((doc.stageHistory || []).map(update => [update.stage, update.completedAt]));
+    const currentStageIndex = Number.isInteger(doc.tripStageIndex)
+      ? Math.max(0, Math.min(doc.tripStageIndex, TRIP_STAGES.length - 1))
+      : 0;
+    const completed = Boolean(doc.returnedAt);
+    const currentStage = TRIP_STAGES[currentStageIndex];
+    const lastUpdate = doc.stageHistory?.[doc.stageHistory.length - 1]?.completedAt || doc.acceptedAt;
+    const timeline = TRIP_STAGES.map((stage, index) => {
+      const done = completed || index < currentStageIndex;
+      const current = !completed && index === currentStageIndex;
+      const enteredAt = index === 0
+        ? doc.acceptedAt
+        : stageHistory.get(TRIP_STAGES[index - 1].key);
+      const timestamp = done ? stageHistory.get(stage.key) : current ? enteredAt : null;
+      const marker = done ? "✓" : index + 1;
+      return `<div class="tracking-stage ${done ? "done" : current ? "current" : ""}">
+        <span class="tracking-stage-dot">${marker}</span>
+        <span class="tracking-stage-label">${stage.label}</span>
+        ${timestamp ? `<small>${formatDateTime(timestamp)}</small>` : ""}
+      </div>`;
+    }).join("");
+
+    return `<article class="tracking-card">
+      <div class="tracking-card-heading">
+        <div><h2>${escapeHtml(doc.documentNumber || doc.declarationNumber)}</h2><p>البيان: ${escapeHtml(doc.declarationNumber)} · الحاوية: ${escapeHtml(doc.containerNumber)}</p></div>
+        <span class="status-pill ${completed ? "status-issued" : "status-on-trip"}">${completed ? "مكتملة" : "قيد التنفيذ"}</span>
+      </div>
+      <div class="tracking-details">
+        <div><small>السائق</small><strong>${escapeHtml(driver?.name || "—")}${driver?.phone ? ` · ${escapeHtml(driver.phone)}` : ""}</strong></div>
+        <div><small>الشاحنة / رقم الأسطول</small><strong>${escapeHtml(truck?.plateNumber || "—")} · ${escapeHtml(truck?.fleetNumber || "—")}</strong></div>
+        <div><small>المسار</small><strong>من: ${escapeHtml(doc.port)} · إلى: ${escapeHtml(doc.destination)}</strong></div>
+        <div><small>قُبل الطلب في</small><strong>${formatDateTime(doc.acceptedAt)}</strong></div>
+        <div><small>المرحلة الحالية</small><strong>${completed ? "تم إعادة الفارغ" : currentStage.label}</strong></div>
+        <div><small>آخر تحديث</small><strong>${formatDateTime(lastUpdate)}</strong></div>
+      </div>
+      <div class="tracking-timeline-wrap"><div class="tracking-timeline">${timeline}</div></div>
+    </article>`;
+  }).join("");
+}
+
+async function refreshTracking(showConfirmation = false) {
+  if (trackingRefreshInFlight) return;
+  trackingRefreshInFlight = true;
+  const button = $("#refresh-tracking");
+  button.disabled = true;
+  try {
+    await refreshServerState();
+    if (showConfirmation) showToast("تم تحديث تتبع الرحلات.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    trackingRefreshInFlight = false;
+    button.disabled = false;
+  }
 }
 
 function populatePortFilter() {
@@ -1776,18 +1979,28 @@ async function handleTruckSubmit(event) {
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
   if (!driverById(values.driverId)?.isActive) return showToast("اختر سائقاً نشطاً للسيارة.", true);
-  if (state.trucks.some(item => item.fleetNumber.toLowerCase() === values.fleetNumber.trim().toLowerCase() || item.plateNumber.toLowerCase() === values.plateNumber.trim().toLowerCase() || item.serialNumber.toLowerCase() === values.serialNumber.trim().toLowerCase())) {
-    return showToast("رقم الأسطول أو اللوحة أو الرقم التسلسلي مسجل مسبقاً.", true);
+  if (state.trucks.some(item => item.id !== editingTruckId && (
+    item.fleetNumber.toLowerCase() === values.fleetNumber.trim().toLowerCase() ||
+    item.plateNumber.toLowerCase() === values.plateNumber.trim().toLowerCase() ||
+    item.serialNumber.toLowerCase() === values.serialNumber.trim().toLowerCase()
+  ))) {
+    return showToast(editingTruckId ? "بيانات الشاحنة مسجلة مسبقاً." : "رقم الأسطول أو اللوحة أو الرقم التسلسلي مسجل مسبقاً.", true);
   }
   try {
-    await apiRequest("/api/trucks", {
-      method: "POST",
+    const editingTruck = Boolean(editingTruckId);
+    await apiRequest(editingTruck ? `/api/trucks/${encodeURIComponent(editingTruckId)}` : "/api/trucks", {
+      method: editingTruck ? "PATCH" : "POST",
       body: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
     });
-    form.reset();
-    $("#truck-form-wrap").classList.add("hidden");
     await refreshServerState();
-    showToast("تمت إضافة الشاحنة.");
+    if (editingTruck) {
+      cancelTruckEdit();
+      showToast("تم تحديث بيانات الشاحنة.");
+    } else {
+      form.reset();
+      $("#truck-form-wrap").classList.add("hidden");
+      showToast("تمت إضافة الشاحنة.");
+    }
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1821,18 +2034,27 @@ async function handleDriverSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
-  if (state.drivers.some(item => item.nationalId.toLowerCase() === values.nationalId.trim().toLowerCase() || item.licenseNumber.toLowerCase() === values.licenseNumber.trim().toLowerCase())) {
-    return showToast("رقم الهوية أو الرخصة مسجل مسبقاً.", true);
+  if (state.drivers.some(item => item.id !== editingDriverId && (
+    item.nationalId.toLowerCase() === values.nationalId.trim().toLowerCase() ||
+    (item.passportNumber || "").toLowerCase() === values.passportNumber.trim().toLowerCase()
+  ))) {
+    return showToast(editingDriverId ? "بيانات السائق مسجلة مسبقاً." : "رقم الهوية أو جواز السفر مسجل مسبقاً.", true);
   }
   try {
-    await apiRequest("/api/drivers", {
-      method: "POST",
+    const editingDriver = Boolean(editingDriverId);
+    await apiRequest(editingDriver ? `/api/drivers/${encodeURIComponent(editingDriverId)}` : "/api/drivers", {
+      method: editingDriver ? "PATCH" : "POST",
       body: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
     });
-    form.reset();
-    $("#driver-form-wrap").classList.add("hidden");
     await refreshServerState();
-    showToast("تمت إضافة السائق.");
+    if (editingDriver) {
+      cancelDriverEdit();
+      showToast("تم تحديث بيانات السائق.");
+    } else {
+      form.reset();
+      $("#driver-form-wrap").classList.add("hidden");
+      showToast("تمت إضافة السائق.");
+    }
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1896,6 +2118,8 @@ function init() {
     }
     if (action.dataset.action === "delete-truck") deleteTruck(action.dataset.id);
     if (action.dataset.action === "delete-driver") deleteDriver(action.dataset.id);
+    if (action.dataset.action === "edit-truck") beginTruckEdit(action.dataset.id);
+    if (action.dataset.action === "edit-driver") beginDriverEdit(action.dataset.id);
     if (action.dataset.action === "edit-account") beginAccountEdit(action.dataset.id);
   });
   $("#fasah-search-form").addEventListener("submit", event => {
@@ -1903,16 +2127,30 @@ function init() {
     renderFasahResults($("#fasah-query").value);
   });
   $("#clearance-form").addEventListener("submit", handleClearanceSubmit);
+  $("#clearance-port").addEventListener("change", event => {
+    $("#clearance-port-city").value = PORT_CITIES[event.target.value] || "";
+  });
   $("#issue-clearance").addEventListener("change", renderSelectedClearance);
   $("#issue-form").addEventListener("submit", issueDocument);
   $("#truck-filter").addEventListener("input", renderFleet);
   $("#driver-filter").addEventListener("input", renderDrivers);
+  $("#tracking-query").addEventListener("input", renderTripTracking);
+  $("#tracking-filter").addEventListener("change", renderTripTracking);
+  $("#refresh-tracking").addEventListener("click", () => refreshTracking(true));
   $("#archive-query").addEventListener("input", event => renderArchive(event.target.value));
   $("#truck-form").addEventListener("submit", handleTruckSubmit);
   $("#driver-form").addEventListener("submit", handleDriverSubmit);
-  $("#toggle-truck-form").addEventListener("click", () => $("#truck-form-wrap").classList.toggle("hidden"));
+  $("#toggle-truck-form").addEventListener("click", () => {
+    if (editingTruckId) cancelTruckEdit();
+    else $("#truck-form-wrap").classList.toggle("hidden");
+  });
   $("#toggle-clearance-form").addEventListener("click", () => $("#clearance-form-wrap").classList.toggle("hidden"));
-  $("#toggle-driver-form").addEventListener("click", () => $("#driver-form-wrap").classList.toggle("hidden"));
+  $("#toggle-driver-form").addEventListener("click", () => {
+    if (editingDriverId) cancelDriverEdit();
+    else $("#driver-form-wrap").classList.toggle("hidden");
+  });
+  $("#cancel-truck-edit").addEventListener("click", cancelTruckEdit);
+  $("#cancel-driver-edit").addEventListener("click", cancelDriverEdit);
   $("#truck-rows").addEventListener("change", async event => {
     if (event.target.matches(".truck-select")) {
       if (event.target.checked) selectedTruckIds.add(event.target.dataset.id);
@@ -2002,3 +2240,8 @@ new MutationObserver(() => localizeDocument()).observe(document.body, {
   characterData: true,
   subtree: true
 });
+window.setInterval(() => {
+  if (currentAccount?.role === "ADMIN" && !document.hidden && $("#view-tracking").classList.contains("active")) {
+    refreshTracking();
+  }
+}, 30000);
