@@ -184,14 +184,15 @@ tbody tr:hover { background: #fbfcfe; }
 .section-spaced { margin-top: 25px; padding-top: 19px; border-top: 1px solid #edf0f3; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin-top: 16px; }
 .field { display: grid; gap: 6px; color: #6e7f90; font-size: 10px; }
-.field input, .field select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #e3e9ef; border-radius: 7px; outline: 0; color: #42566b; background: #fff; font-size: 10px; }
+.field input, .field select, .field textarea { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #e3e9ef; border-radius: 7px; outline: 0; color: #42566b; background: #fff; font-size: 10px; }
+.field textarea { min-height: 76px; padding: 9px 10px; resize: vertical; }
 .field input.file-input { height: auto; min-height: 38px; padding: 8px; }
 .file-hint { color: #95a2ae; font-size: 9px; font-weight: 400; }
 .attachment-list { display: grid; gap: 5px; margin-top: 9px; color: #718397; font-size: 9px; }
 .attachment-list strong { color: #52677c; font-weight: 600; }
 .attachment-list a { width: fit-content; color: #2874b5; text-decoration: underline; text-underline-offset: 2px; }
 .field input::placeholder { color: #b2bcc5; }
-.field input:focus, .field select:focus { border-color: #8db9dc; box-shadow: 0 0 0 3px #3588cb12; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: #8db9dc; box-shadow: 0 0 0 3px #3588cb12; }
 .full-field { grid-column: 1 / -1; }
 .selected-clearance { grid-column: 1 / -1; padding: 10px 12px; border: 1px solid #dcefe7; border-radius: 8px; color: #4a7564; background: #f1faf6; font-size: 10px; line-height: 1.8; }
 .form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #edf0f3; }
@@ -273,6 +274,11 @@ tbody tr:hover { background: #fbfcfe; }
 .driver-content { width: min(1200px, 100%); margin: 0 auto; padding: 30px 24px; }
 .driver-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 900px; }
 .driver-trips-panel { overflow: hidden; }
+.expense-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 720px; }
+.expense-list-panel, .driver-expense-panel, .driver-expense-history { overflow: hidden; }
+.expense-table { min-width: 900px; }
+.driver-expense-form { padding: 0 18px 18px; }
+.driver-expense-form .button { margin-top: 12px; }
 .driver-tabs { display: flex; gap: 7px; margin: 0 0 18px; border-bottom: 1px solid #e4eaf0; }
 .driver-tab-button { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; color: #748597; background: transparent; font-size: 11px; }
 .driver-tab-button.active { border-bottom-color: #168d72; color: #16785f; font-weight: 600; }

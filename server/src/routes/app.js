@@ -39,6 +39,17 @@ const tripInclude = {
   transportDocument: { include: { attachments: { select: attachmentMetadataSelect } } },
   stageUpdates: { orderBy: { completedAt: "asc" } }
 };
+const tripExpenseInclude = {
+  trip: {
+    include: {
+      truck: { select: { plateNumber: true } },
+      driver: { select: { name: true, nationalId: true } },
+      container: { select: { containerNumber: true } },
+      customsClearance: { select: { declarationNumber: true } },
+      transportDocument: { select: { documentNumber: true } }
+    }
+  }
+};
 
 function normalizedUsername(value) {
   return value.trim().toLocaleLowerCase("en");
@@ -100,6 +111,24 @@ function mapTrip(trip) {
   };
 }
 
+function mapTripExpense(expense) {
+  return {
+    id: expense.id,
+    tripId: expense.tripId,
+    amount: expense.amount.toString(),
+    type: expense.type,
+    notes: expense.notes || "",
+    createdAt: expense.createdAt.toISOString(),
+    driverId: expense.trip.driverId,
+    driverName: expense.trip.driver.name,
+    nationalId: expense.trip.driver.nationalId,
+    plateNumber: expense.trip.truck.plateNumber,
+    containerNumber: expense.trip.container.containerNumber,
+    declarationNumber: expense.trip.customsClearance.declarationNumber,
+    documentNumber: expense.trip.transportDocument?.documentNumber || null
+  };
+}
+
 function stateTruck(truck) {
   return {
     id: truck.id,
@@ -140,7 +169,7 @@ async function writeAudit(tx, req, action, entityType, entityId, metadata) {
 async function getAppState(req) {
   const isDriver = req.user.role === "DRIVER";
   const driverId = isDriver ? req.user.driverId : undefined;
-  const [trucks, drivers, clearances, trips, accounts, ports] = await Promise.all([
+  const [trucks, drivers, clearances, trips, accounts, ports, tripExpenses] = await Promise.all([
     prisma.truck.findMany({
       where: isDriver
         ? { trips: { some: { driverId } } }
@@ -173,13 +202,19 @@ async function getAppState(req) {
       },
       orderBy: { createdAt: "asc" }
     }),
-    isDriver ? Promise.resolve([]) : prisma.port.findMany({ orderBy: { name: "asc" } })
+    isDriver ? Promise.resolve([]) : prisma.port.findMany({ orderBy: { name: "asc" } }),
+    prisma.tripExpense.findMany({
+      where: isDriver ? { trip: { is: { driverId } } } : {},
+      include: tripExpenseInclude,
+      orderBy: { createdAt: "desc" }
+    })
   ]);
   return {
     trucks: trucks.map(stateTruck),
     drivers: drivers.map(stateDriver),
     clearances: clearances.map(mapClearance),
     docs: trips.map(mapTrip),
+    tripExpenses: tripExpenses.map(mapTripExpense),
     accounts: accounts.map(account => ({ ...account, createdAt: account.createdAt.toISOString() })),
     ports
   };
@@ -671,6 +706,54 @@ router.post("/trips", requireAdmin, async (req, res) => {
     return created;
   }, { isolationLevel: "Serializable" });
   res.status(201).json(mapTrip(trip));
+});
+
+router.post("/trip-expenses", async (req, res) => {
+  if (req.user.role !== "DRIVER" || !req.user.driverId) {
+    return res.status(403).json({ error: "driver_only" });
+  }
+  const schema = z.object({
+    tripId: z.string().trim().min(1),
+    amount: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).refine(value => Number(value) > 0),
+    type: z.enum(["MAINTENANCE", "FUEL"]),
+    notes: z.string().trim().max(500).optional().default("")
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_trip_expense" });
+
+  const expense = await prisma.$transaction(async tx => {
+    const trip = await tx.trip.findFirst({
+      where: {
+        id: parsed.data.tripId,
+        driverId: req.user.driverId,
+        driverAcceptedAt: { not: null }
+      },
+      select: { id: true }
+    });
+    if (!trip) {
+      throw Object.assign(new Error("expense_trip_unavailable"), {
+        statusCode: 404,
+        publicCode: "expense_trip_unavailable"
+      });
+    }
+
+    const created = await tx.tripExpense.create({
+      data: {
+        tripId: trip.id,
+        amount: parsed.data.amount,
+        type: parsed.data.type,
+        notes: parsed.data.notes || null
+      },
+      include: tripExpenseInclude
+    });
+    await writeAudit(tx, req, "trip_expense.created", "TripExpense", created.id, {
+      tripId: trip.id,
+      amount: parsed.data.amount,
+      type: parsed.data.type
+    });
+    return created;
+  });
+  res.status(201).json(mapTripExpense(expense));
 });
 
 router.get("/attachments/:id", async (req, res) => {

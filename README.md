@@ -23,6 +23,8 @@ Administrators can enter clearance details and attach supporting clearance and t
 
 The administrator's trip-tracking screen shows accepted trips, driver-reported milestones, and their timestamps. It refreshes every 30 seconds while open; it does not provide live GPS tracking.
 
+Drivers can record fuel or maintenance expenses against accepted trips. Administrators can review the consolidated expense list, including the truck, driver, residency number, amount, type, and notes.
+
 The app is not yet deployed or connected to government APIs. The database starts empty; enter the company's real truck, driver, port, and account records before operations.
 
 ## VPS templates

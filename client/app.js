@@ -18,6 +18,38 @@ const TRANSLATIONS = Object.freeze({
   "الأسطول والسائقون": "Fleet & Drivers",
   "تتبع الرحلات": "Trip Tracking",
   "تتبع رحلات السائقين": "Driver Trip Tracking",
+  "تكاليف الرحلات": "Trip Expenses",
+  "مصروفات التشغيل": "Operating Expenses",
+  "سجل موحد لمصروفات السائقين المسجلة على رحلاتهم.": "A unified record of driver expenses reported for their trips.",
+  "إجمالي التكاليف المسجلة": "Total Recorded Expenses",
+  "ريال سعودي": "Saudi Riyal",
+  "عدد المصروفات": "Expense Count",
+  "لكل السائقين": "All Drivers",
+  "سجل مصروفات السائقين": "Driver Expense Records",
+  "تُربط كل تكلفة بالرحلة والشاحنة التي أُضيفت عليها.": "Each expense is linked to its trip and truck.",
+  "رقم السيارة": "Vehicle Plate",
+  "الرحلة / الحاوية": "Trip / Container",
+  "التكلفة": "Cost",
+  "نوع التكلفة": "Expense Type",
+  "تاريخ التسجيل": "Recorded At",
+  "سجل تكاليف الرحلات المرتبطة بحسابك.": "Trip expenses linked to your account.",
+  "إضافة تكلفة رحلة": "Add Trip Expense",
+  "أدخل المصروف المرتبط بإحدى رحلاتك المقبولة.": "Enter an expense for one of your accepted trips.",
+  "الرحلة المرتبطة": "Associated Trip",
+  "بنزين": "Fuel",
+  "قيمة المبلغ (ريال)": "Amount (SAR)",
+  "اختر الرحلة": "Select a trip",
+  "الملاحظات": "Notes",
+  "تفاصيل إضافية عن التكلفة (اختياري)": "Additional expense details (optional)",
+  "تظهر الرحلات بعد قبولها.": "Trips are available after you accept them.",
+  "حفظ التكلفة": "Save Expense",
+  "مصروفاتي المسجلة": "My Recorded Expenses",
+  "لا توجد تكاليف مسجلة.": "No expenses recorded.",
+  "لا توجد رحلات مقبولة لإضافة تكلفة.": "There are no accepted trips to add an expense to.",
+  "تم تسجيل التكلفة.": "Expense recorded.",
+  "تحقق من مبلغ ونوع المصروف والرحلة.": "Check the expense amount, type, and trip.",
+  "لا يمكن إضافة تكلفة لهذه الرحلة.": "An expense cannot be added to this trip.",
+  "هذه الخدمة متاحة لحسابات السائقين فقط.": "This feature is only available to driver accounts.",
   "متابعة الأسطول": "Fleet Tracking",
   "تابع الرحلات بعد قبول السائق وتحديث مراحلها. لا تعرض هذه الشاشة موقع GPS مباشراً.": "Track trips after the driver accepts them and records stage updates. This screen does not show live GPS location.",
   "تحديث الآن": "Refresh now",
@@ -650,6 +682,10 @@ const CLEARANCE_LABELS = {
   ON_HOLD: { text: "معلّق", className: "status-maintenance" },
   REJECTED: { text: "مرفوض", className: "status-maintenance" }
 };
+const EXPENSE_TYPE_LABELS = {
+  FUEL: "بنزين",
+  MAINTENANCE: "صيانة"
+};
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -664,7 +700,7 @@ function dateOffset(days) {
   return dateOnly(date);
 }
 
-let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [] };
+let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [], tripExpenses: [] };
 let toastTimer;
 let currentAccount = null;
 let fasahSearchSequence = 0;
@@ -763,6 +799,13 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function formatCurrency(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  const locale = language === "ar" ? "ar-SA" : "en-SA";
+  return new Intl.NumberFormat(locale, { style: "currency", currency: "SAR" }).format(amount);
+}
+
 function showToast(message, isError = false) {
   const toast = $("#toast");
   toast.textContent = translateText(message);
@@ -787,6 +830,9 @@ const API_ERRORS = {
   setup_already_complete: "تم إنشاء حساب المدير الأول مسبقاً.",
   record_already_exists: "توجد بيانات مسجلة بهذه القيمة مسبقاً.",
   record_not_found: "السجل المطلوب غير موجود.",
+  invalid_trip_expense: "تحقق من مبلغ ونوع المصروف والرحلة.",
+  expense_trip_unavailable: "لا يمكن إضافة تكلفة لهذه الرحلة.",
+  driver_only: "هذه الخدمة متاحة لحسابات السائقين فقط.",
   truck_details_conflict: "بيانات الشاحنة مسجلة مسبقاً.",
   driver_details_conflict: "بيانات السائق مسجلة مسبقاً.",
   truck_has_active_trip: "لا يمكن تعديل الشاحنة أو حذفها لارتباطها برحلة نشطة.",
@@ -887,6 +933,7 @@ async function refreshServerState() {
   populateTruckDriverOptions();
   populateIssueOptions($("#issue-clearance").value);
   renderTripTracking();
+  renderTripExpenses();
   renderArchive($("#archive-query").value);
   renderReports();
   if (currentAccount?.role === "ADMIN") renderAccounts();
@@ -1097,9 +1144,10 @@ function documentLabel(doc) {
 }
 
 function showDriverTab(tab) {
-  activeDriverTab = tab === "trips" ? "trips" : "requests";
+  activeDriverTab = ["trips", "expenses"].includes(tab) ? tab : "requests";
   $("#driver-requests-panel").classList.toggle("active", activeDriverTab === "requests");
   $("#driver-trips-panel").classList.toggle("active", activeDriverTab === "trips");
+  $("#driver-expenses-panel").classList.toggle("active", activeDriverTab === "expenses");
   $$(".driver-tab-button").forEach(button => button.classList.toggle("active", button.dataset.driverTab === activeDriverTab));
 }
 
@@ -1114,6 +1162,7 @@ function switchView(name) {
     issue: "إصدار وثيقة نقل",
     fleet: "الأسطول والسائقون",
     tracking: "تتبع الرحلات",
+    expenses: "تكاليف الرحلات",
     archive: "أرشيف الوثائق",
     reports: "التقارير والتصدير",
     accounts: "حسابات المستخدمين"
@@ -1125,6 +1174,7 @@ function switchView(name) {
   if (name === "issue") populateIssueOptions();
   if (name === "fleet") { renderFleet(); renderDrivers(); }
   if (name === "tracking") renderTripTracking();
+  if (name === "expenses") renderTripExpenses();
   if (name === "archive") renderArchive($("#archive-query").value);
   if (name === "reports") renderReports();
   if (name === "accounts") renderAccounts();
@@ -1417,6 +1467,27 @@ function clearSelection(type) {
   selectedIds.clear();
   if (type === "trucks") renderFleet();
   else renderDrivers();
+}
+
+function renderTripExpenses() {
+  const expenses = state.tripExpenses || [];
+  const totalCents = expenses.reduce((sum, expense) => {
+    const amount = Number(expense.amount);
+    return sum + (Number.isFinite(amount) ? Math.round(amount * 100) : 0);
+  }, 0);
+  $("#expense-total").textContent = formatCurrency(totalCents / 100);
+  $("#expense-count").textContent = expenses.length;
+  $("#expense-rows").innerHTML = expenses.length ? expenses.map(expense => `
+    <tr>
+      <td>${escapeHtml(expense.plateNumber)}</td>
+      <td>${escapeHtml(expense.driverName)}</td>
+      <td>${escapeHtml(expense.nationalId)}</td>
+      <td>${escapeHtml(expense.declarationNumber)} · ${escapeHtml(expense.containerNumber)}</td>
+      <td>${formatCurrency(expense.amount)}</td>
+      <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
+      <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${formatDateTime(expense.createdAt)}</td>
+    </tr>`).join("") : `<tr><td colspan="8" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
 }
 
 function renderArchive(query = "") {
@@ -1721,6 +1792,31 @@ async function handleAccountSubmit(event) {
   }
 }
 
+function renderDriverExpenses(driver) {
+  const acceptedTrips = state.docs.filter(doc => doc.driverId === driver.id && doc.acceptedAt);
+  const select = $("#driver-expense-trip");
+  const selectedTripId = select.value;
+  select.innerHTML = `<option value="">${translateText("اختر الرحلة")}</option>` + acceptedTrips.map(doc => `
+    <option value="${escapeHtml(doc.tripId)}">${escapeHtml(doc.declarationNumber)} — ${escapeHtml(doc.containerNumber)} (${escapeHtml(doc.port)})</option>
+  `).join("");
+  if (acceptedTrips.some(doc => doc.tripId === selectedTripId)) select.value = selectedTripId;
+  select.disabled = acceptedTrips.length === 0;
+  $("#driver-expense-submit").disabled = acceptedTrips.length === 0;
+  $("#driver-expense-trip-hint").textContent = translateText(
+    acceptedTrips.length ? "تظهر الرحلات بعد قبولها." : "لا توجد رحلات مقبولة لإضافة تكلفة."
+  );
+
+  const expenses = (state.tripExpenses || []).filter(expense => expense.driverId === driver.id);
+  $("#driver-expense-rows").innerHTML = expenses.length ? expenses.map(expense => `
+    <tr>
+      <td>${escapeHtml(expense.declarationNumber)} · ${escapeHtml(expense.containerNumber)}</td>
+      <td>${formatCurrency(expense.amount)}</td>
+      <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
+      <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${formatDateTime(expense.createdAt)}</td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+}
+
 function renderDriverDashboard() {
   if (currentAccount?.role !== "DRIVER") return;
   const driver = driverById(currentAccount.driverId);
@@ -1729,6 +1825,7 @@ function renderDriverDashboard() {
   const requests = docs.filter(doc => doc.requestStatus === "PENDING");
   const trips = docs.filter(doc => doc.requestStatus === "ACCEPTED");
   const activeDocs = trips.filter(doc => !doc.returnedAt);
+  renderDriverExpenses(driver);
   $("#driver-stat-total").textContent = docs.length;
   $("#driver-stat-active").textContent = activeDocs.length;
   $("#driver-stat-complete").textContent = trips.length - activeDocs.length;
@@ -2060,6 +2157,35 @@ async function handleDriverSubmit(event) {
   }
 }
 
+async function handleTripExpenseSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const trip = state.docs.find(doc =>
+    doc.tripId === values.tripId &&
+    doc.driverId === currentAccount?.driverId &&
+    doc.acceptedAt
+  );
+  if (!trip) return showToast("لا يمكن إضافة تكلفة لهذه الرحلة.", true);
+
+  try {
+    await apiRequest("/api/trip-expenses", {
+      method: "POST",
+      body: {
+        tripId: trip.tripId,
+        amount: values.amount.trim(),
+        type: values.type,
+        notes: values.notes.trim()
+      }
+    });
+    form.reset();
+    await refreshServerState();
+    showToast("تم تسجيل التكلفة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function clearReportFilters() {
   $("#filter-from").value = "";
   $("#filter-to").value = "";
@@ -2218,6 +2344,7 @@ function init() {
   $("#login-form").addEventListener("submit", login);
   $("#admin-logout").addEventListener("click", logout);
   $("#driver-logout").addEventListener("click", logout);
+  $("#driver-expense-form").addEventListener("submit", handleTripExpenseSubmit);
   $("#account-role").addEventListener("change", updateAccountRoleFields);
   $("#account-form").addEventListener("submit", handleAccountSubmit);
   $("#cancel-account-edit").addEventListener("click", cancelAccountEdit);
