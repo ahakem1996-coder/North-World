@@ -30,7 +30,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   background: var(--navy); box-shadow: -8px 0 28px rgba(13, 35, 57, .08);
 }
 .brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; padding: 1px 5px 25px; }
-.brand-mark { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 14px; color: #fff; background: linear-gradient(145deg, #40b89b, #168a78); font-size: 22px; font-weight: 700; box-shadow: 0 7px 16px #0a796e55; }
+.brand-logo { width: 42px; height: 42px; flex: 0 0 auto; object-fit: cover; border-radius: 12px; box-shadow: 0 7px 16px #0a1a2a55; }
 .brand strong { display: block; font-size: 19px; line-height: 1.2; letter-spacing: .03em; }
 .brand small { display: block; margin-top: 4px; color: #8fa4b8; font-size: 11px; }
 .sidebar-label { padding: 9px 10px 11px; color: #758da4; font-size: 11px; }
@@ -67,7 +67,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .topbar-divider { height: 21px; width: 1px; background: #e6eaf0; }
 .today-label { color: #69798a; font-size: 11px; }
 .mobile-brand { display: none; align-items: center; gap: 8px; }
-.mobile-brand .brand-mark { width: 30px; height: 30px; border-radius: 10px; font-size: 16px; }
+.mobile-brand-logo { width: 30px; height: 30px; flex: 0 0 auto; object-fit: cover; border-radius: 9px; }
 
 .main-content { width: 100%; max-width: 1640px; margin: 0 auto; padding: 31px 34px 26px; flex: 1; }
 .view { display: none; animation: appear .22s ease-out; }
@@ -212,6 +212,8 @@ tbody tr:hover { background: #fbfcfe; }
 .inline-form-wrap { padding: 15px; margin-bottom: 13px; }
 .inline-form { display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr)) auto; align-items: end; gap: 10px; }
 .inline-form .button { min-height: 38px; }
+.clearance-pdf-import { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.clearance-pdf-import small { color: #8796a5; font-size: 9px; }
 .inline-form-actions, .row-actions { display: flex; align-items: center; gap: 6px; }
 .fleet-panel-tools { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
 .selection-count { color: #64788b; font-size: 9px; white-space: nowrap; }
@@ -255,6 +257,7 @@ tbody tr:hover { background: #fbfcfe; }
 .auth-card > .language-toggle { position: absolute; top: 22px; inset-inline-end: 20px; }
 .auth-brand { width: fit-content; margin: 0 0 28px; padding: 0; color: #1d344c; }
 .auth-card > .auth-brand { margin-top: 34px; }
+.auth-brand .brand-logo { width: 56px; height: 56px; border-radius: 14px; }
 .auth-brand small { color: #8493a3; }
 .auth-panel h1 { margin: 7px 0 5px; color: #1c3046; font-size: 23px; }
 .auth-panel > p { margin: 0 0 20px; color: #8694a2; font-size: 11px; line-height: 1.8; }
@@ -385,7 +388,7 @@ tbody tr:hover { background: #fbfcfe; }
 @media (max-width: 850px) {
   .sidebar { width: 68px; padding: 16px 9px; align-items: center; }
   .brand { padding: 0 0 22px; }
-  .brand > span:not(.brand-mark), .sidebar-label, .nav-link:not(.active)::after, .nav-link .nav-badge, .nav-link { font-size: 0; }
+  .brand > span, .sidebar-label, .nav-link:not(.active)::after, .nav-link .nav-badge, .nav-link { font-size: 0; }
   .nav-link { width: 46px; height: 45px; min-height: 45px; justify-content: center; padding: 0; }
   .nav-link.active { font-size: 0; }
   .nav-icon { width: auto; font-size: 19px; }
@@ -401,7 +404,7 @@ tbody tr:hover { background: #fbfcfe; }
 @media (max-width: 600px) {
   body { min-width: 320px; }
   .sidebar { width: 54px; padding-right: 5px; padding-left: 5px; }
-  .brand .brand-mark { width: 36px; height: 36px; }
+  .brand .brand-logo { width: 36px; height: 36px; }
   .nav-link { width: 40px; }
   .workspace { margin-right: 54px; }
   .topbar { height: 58px; padding: 0 12px; }

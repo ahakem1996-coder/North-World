@@ -103,6 +103,12 @@ const TRANSLATIONS = Object.freeze({
   "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً.": "The Fasah appointment and PDF were saved, and the clearance form was filled automatically.",
   "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
   "تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.": "Declaration, container, and port were filled from the ticket. Size defaults to 40 feet; container type and clearance date are not provided by the appointment ticket, so enter them manually.",
+  "جلب أحدث بيانات مستخرجة من PDF": "Load latest data extracted from PDF",
+  "سيتم استخدام أحدث تذكرة PDF محفوظة.": "The most recently saved PDF ticket will be used.",
+  "لا توجد بيانات PDF محفوظة. ارفع تذكرة فسح واستخرج بياناتها أولاً.": "No PDF data is saved. Upload and extract a Fasah ticket first.",
+  "أحدث تذكرة PDF لا تحتوي رقم البيان أو رقم الحاوية.": "The latest PDF ticket does not contain a declaration or container number.",
+  "تم جلب بيانات الفسح من أحدث PDF محفوظ.": "Clearance data was loaded from the latest saved PDF.",
+  "تم جلب البيانات المتاحة من أحدث PDF. أكمل رقم البيان أو الحاوية الناقص يدوياً.": "Available data was loaded from the latest PDF. Enter the missing declaration or container number manually.",
   "أؤكد أن حالة الفسح وتاريخه مطابقان لإثبات فسح رسمي، وليس لتذكرة موعد فقط.": "I confirm the clearance status and date match official clearance proof, not just an appointment ticket.",
   "أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.": "Confirm the clearance status and date using official documentation before saving.",
   "تم إصدار وثيقة لهذا البيان.": "A document has already been issued for this declaration.",
@@ -1442,28 +1448,57 @@ function appointmentPortName(portName) {
   return "";
 }
 
-function fillClearanceFormFromAppointment(appointment, appointmentId = null) {
+function fillClearanceFormFromAppointment(appointment, appointmentId = null, resetForm = true) {
   const declarationNumber = appointmentDeclarationNumber(appointment).trim();
   const containerNumber = appointmentContainerNumber(appointment).trim();
   if (!declarationNumber && !containerNumber) return false;
 
   pendingFasahAppointmentId = appointmentId;
   const form = $("#clearance-form");
-  form.reset();
-  form.elements.namedItem("declarationNumber").value = declarationNumber;
-  form.elements.namedItem("containerNumber").value = containerNumber;
-  form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
-  form.elements.namedItem("type").value = appointment.containerType || "";
-  form.elements.namedItem("status").value = "CLEARED";
-  form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
-  $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
+  if (resetForm) form.reset();
+  if (declarationNumber) form.elements.namedItem("declarationNumber").value = declarationNumber;
+  if (containerNumber) form.elements.namedItem("containerNumber").value = containerNumber;
+  if (resetForm) {
+    form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
+    form.elements.namedItem("type").value = appointment.containerType || "";
+    form.elements.namedItem("status").value = "CLEARED";
+    form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
+  }
+  if (resetForm || declarationNumber) {
+    $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
+  }
   $("#clearance-confirmed").checked = false;
   const portSelect = $("#clearance-port");
-  portSelect.value = appointmentPortName(appointment.portName);
-  portSelect.dispatchEvent(new Event("change"));
+  const portName = appointmentPortName(appointment.portName);
+  if (resetForm || portName) {
+    portSelect.value = portName;
+    portSelect.dispatchEvent(new Event("change"));
+  }
   updateClearanceConfirmation();
   $("#clearance-form-wrap").classList.remove("hidden");
   return Boolean(declarationNumber && containerNumber);
+}
+
+function fillClearanceFromLatestPdf() {
+  const appointment = [...(state.fasahAppointments || [])].sort((left, right) =>
+    Date.parse(right.createdAt) - Date.parse(left.createdAt)
+  )[0];
+  if (!appointment) {
+    return showToast("لا توجد بيانات PDF محفوظة. ارفع تذكرة فسح واستخرج بياناتها أولاً.", true);
+  }
+
+  const hasIdentifiers = Boolean(
+    appointmentDeclarationNumber(appointment).trim() ||
+    appointmentContainerNumber(appointment).trim()
+  );
+  if (!hasIdentifiers) {
+    return showToast("أحدث تذكرة PDF لا تحتوي رقم البيان أو رقم الحاوية.", true);
+  }
+
+  const complete = fillClearanceFormFromAppointment(appointment, appointment.id, false);
+  showToast(complete
+    ? "تم جلب بيانات الفسح من أحدث PDF محفوظ."
+    : "تم جلب البيانات المتاحة من أحدث PDF. أكمل رقم البيان أو الحاوية الناقص يدوياً.", !complete);
 }
 
 function updateClearanceConfirmation() {
@@ -2600,7 +2635,14 @@ async function handleClearanceSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
-  if (pendingFasahAppointmentId && values.status !== "CLEARED") {
+  const appointment = pendingFasahAppointmentId
+    ? (state.fasahAppointments || []).find(item => item.id === pendingFasahAppointmentId)
+    : null;
+  const appointmentMatchesClearance = Boolean(appointment &&
+    appointmentDeclarationNumber(appointment).trim() === values.declarationNumber.trim() &&
+    normalizeContainerNumber(appointmentContainerNumber(appointment)) === normalizeContainerNumber(values.containerNumber));
+  const matchedAppointment = appointmentMatchesClearance ? appointment : null;
+  if (matchedAppointment && values.status !== "CLEARED") {
     return showToast("لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.", true);
   }
   if (values.status === "CLEARED" && !$("#clearance-confirmed").checked) {
@@ -2609,9 +2651,6 @@ async function handleClearanceSubmit(event) {
   if (values.status === "CLEARED" && !values.clearedAt) {
     return showToast("أدخل تاريخ الفسح للحاوية المفسوحة.", true);
   }
-  const appointment = pendingFasahAppointmentId
-    ? (state.fasahAppointments || []).find(item => item.id === pendingFasahAppointmentId)
-    : null;
   try {
     const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
     const clearance = await apiRequest("/api/clearances/manual", {
@@ -2626,13 +2665,13 @@ async function handleClearanceSubmit(event) {
     await refreshServerState();
     $("#fasah-query").value = clearance.declarationNumber;
     await renderFasahResults(clearance.declarationNumber);
-    if (appointment && clearance.status === "CLEARED") {
+    if (matchedAppointment && clearance.status === "CLEARED") {
       switchView("issue");
       resetAppointmentIssueContext();
       populateIssueOptions(clearance.id);
       $("#issue-clearance").value = clearance.id;
       renderSelectedClearance();
-      const driverMatch = matchIssueDriverFromAppointment(appointment);
+      const driverMatch = matchIssueDriverFromAppointment(matchedAppointment);
       if (driverMatch === "matched") showToast("تم حفظ بيانات الحاوية من الموعد، ومطابقة جوال السائق.");
       else if (driverMatch === "no_available_truck") showToast("تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.", true);
       else showToast("رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
@@ -2861,6 +2900,7 @@ function init() {
   $("#fasah-appointment-review-form").addEventListener("submit", handleFasahAppointmentSave);
   $("#fasah-appointment-cancel").addEventListener("click", cancelFasahAppointmentPreview);
   $("#clearance-form").addEventListener("submit", handleClearanceSubmit);
+  $("#clearance-fetch-latest-pdf").addEventListener("click", fillClearanceFromLatestPdf);
   $("#clearance-port").addEventListener("change", event => {
     $("#clearance-port-city").value = PORT_CITIES[event.target.value] || "";
   });

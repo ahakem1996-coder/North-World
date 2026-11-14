@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10263f">
   <title>عالم الشمال | إدارة النقل والحاويات</title>
+  <link rel="icon" type="image/jpeg" href="assets/north-world-logo.jpeg">
   <link rel="stylesheet" href="styles.css">
   <script defer src="app.js"></script>
 </head>
@@ -13,7 +14,7 @@
     <div class="auth-card">
       <button class="language-toggle" type="button" data-language-toggle>English</button>
       <a class="brand auth-brand" href="#" aria-label="عالم الشمال">
-        <span class="brand-mark">ع</span>
+        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال">
         <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
       </a>
       <div id="auth-setup-panel" class="auth-panel hidden">
@@ -45,7 +46,7 @@
   <div id="admin-app" class="app-shell hidden">
     <aside class="sidebar">
       <a class="brand" href="#" aria-label="عالم الشمال - الصفحة الرئيسية">
-        <span class="brand-mark">ع</span>
+        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال">
         <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
       </a>
       <div class="sidebar-label">القائمة الرئيسية</div>
@@ -74,7 +75,7 @@
 
     <div class="workspace">
       <header class="topbar">
-        <div class="mobile-brand"><span class="brand-mark">ع</span><strong>عالم الشمال</strong></div>
+        <div class="mobile-brand"><img class="mobile-brand-logo" src="assets/north-world-logo.jpeg" alt=""><strong>عالم الشمال</strong></div>
         <div class="breadcrumb"><span>الرئيسية</span><b>/</b><strong id="page-title">لوحة التحكم</strong></div>
         <div class="topbar-tools">
           <div class="service-health" aria-label="حالة الربط">
@@ -180,6 +181,7 @@
           </section>
           <div id="clearance-form-wrap" class="panel inline-form-wrap hidden">
             <form id="clearance-form" class="inline-form">
+              <div class="full-field clearance-pdf-import"><button id="clearance-fetch-latest-pdf" class="button button-secondary" type="button">جلب أحدث بيانات مستخرجة من PDF</button><small>سيتم استخدام أحدث تذكرة PDF محفوظة.</small></div>
               <label id="clearance-declaration-field" class="field">رقم البيان الجمركي<input name="declarationNumber" required maxlength="64"></label>
               <label class="field">رقم الحاوية<input name="containerNumber" required maxlength="32"></label>
               <label class="field">المقاس<select name="size" required><option value="FT_20">20 قدم</option><option value="FT_40" selected>40 قدم</option></select></label>
@@ -309,7 +311,7 @@
 
   <div id="driver-app" class="driver-app hidden">
     <header class="driver-topbar">
-      <a class="brand" href="#" aria-label="عالم الشمال"><span class="brand-mark">ع</span><span><strong>عالم الشمال</strong><small>بوابة السائق</small></span></a>
+      <a class="brand" href="#" aria-label="عالم الشمال"><img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال"><span><strong>عالم الشمال</strong><small>بوابة السائق</small></span></a>
       <div class="driver-session"><span class="driver-avatar">س</span><span><strong id="driver-user-name"></strong><small id="driver-display-name"></small></span><button class="language-toggle" type="button" data-language-toggle>English</button><button id="driver-logout" class="logout-button" type="button">تسجيل الخروج</button></div>
     </header>
     <main class="driver-content">
