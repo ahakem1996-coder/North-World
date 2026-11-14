@@ -85,6 +85,13 @@ const TRANSLATIONS = Object.freeze({
   "ملف PDF الأصلي": "Original PDF",
   "موعد فسح": "Fasah Appointment",
   "موعد محفوظ": "Appointment Saved",
+  "تصدير الفسح إلى Excel": "Export clearances to Excel",
+  "إضافة بيانات الفسح": "Add clearance data",
+  "تعديل بيانات الفسح": "Edit clearance data",
+  "حفظ تعديلات الفسح": "Save clearance changes",
+  "تم تحديث بيانات الفسح.": "Clearance data updated.",
+  "تم تصدير بيانات الفسح إلى Excel.": "Clearance data exported to Excel.",
+  "لا يمكن تعديل بيانات فسح مرتبطة برحلة.": "Clearance records linked to trips cannot be edited.",
   "الرقم المرجعي للحجز": "Booking Reference Number",
   "رقم لوحة المركبة": "Vehicle Plate Number",
   "رقم البيان": "Declaration Number",
@@ -841,6 +848,7 @@ let editingDriverId = null;
 let activeDriverTab = "requests";
 let trackingLastUpdatedAt = null;
 let trackingRefreshInFlight = false;
+let editingClearanceId = null;
 const selectedTruckIds = new Set();
 const selectedDriverIds = new Set();
 
@@ -1005,6 +1013,7 @@ const API_ERRORS = {
   clearance_confirmation_required: "أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.",
   invalid_trip_input: "تحقق من بيانات الرحلة والوثيقة المدخلة.",
   container_details_conflict: "بيانات الحاوية المسجلة لا تطابق المقاس أو النوع المدخل.",
+  clearance_has_trip: "لا يمكن تعديل بيانات فسح مرتبطة برحلة.",
   truck_unavailable: "الشاحنة غير متاحة.",
   trip_request_unavailable: "طلب الرحلة غير متاح لهذا الحساب.",
   trip_stage_unavailable: "لا يمكن تحديث مرحلة هذه الرحلة.",
@@ -1458,6 +1467,56 @@ function updateClearancePortCity() {
   $("#clearance-port-city-field").classList.toggle("hidden", Boolean(city) || !portName);
 }
 
+function beginClearanceEdit(id) {
+  const clearance = clearanceById(id);
+  if (!clearance) return showToast("تعذر العثور على سجل الفسح.", true);
+  if (state.docs.some(doc => doc.clearanceId === id)) {
+    return showToast("لا يمكن تعديل بيانات فسح مرتبطة برحلة.", true);
+  }
+
+  editingClearanceId = id;
+  pendingFasahAppointmentId = null;
+  const form = $("#clearance-form");
+  form.reset();
+  for (const [field, value] of Object.entries({
+    declarationNumber: clearance.declarationNumber,
+    containerNumber: clearance.containerNumber,
+    size: clearance.size === "20 قدم" ? "FT_20" : "FT_40",
+    type: clearance.type,
+    sealNumber: clearance.sealNumber || "",
+    vesselName: clearance.vesselName || "",
+    portName: clearance.port,
+    status: clearance.status,
+    clearedAt: clearance.clearedAt || ""
+  })) {
+    form.elements.namedItem(field).value = value;
+  }
+  const knownCity = portCityFromName(clearance.port);
+  const cityInput = $("#clearance-port-city");
+  cityInput.value = clearance.portCity || knownCity;
+  cityInput.required = Boolean(clearance.port && !knownCity);
+  $("#clearance-port-city-field").classList.toggle("hidden", Boolean(knownCity) || !clearance.port);
+  $("#clearance-declaration-field").classList.remove("hidden");
+  $("#clearance-confirmed").checked = false;
+  $("#clearance-submit-button").textContent = translateText("حفظ تعديلات الفسح");
+  $("#cancel-clearance-edit").classList.remove("hidden");
+  $("#clearance-form-wrap").classList.remove("hidden");
+  updateClearanceConfirmation();
+  $("#clearance-form").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelClearanceEdit() {
+  editingClearanceId = null;
+  pendingFasahAppointmentId = null;
+  $("#clearance-form").reset();
+  $("#clearance-declaration-field").classList.remove("hidden");
+  $("#clearance-submit-button").textContent = translateText("إضافة بيانات الفسح");
+  $("#cancel-clearance-edit").classList.add("hidden");
+  $("#clearance-form-wrap").classList.add("hidden");
+  updateClearancePortCity();
+  updateClearanceConfirmation();
+}
+
 function fillClearanceFormFromAppointment(appointment, appointmentId = null, resetForm = true) {
   const declarationNumber = appointmentDeclarationNumber(appointment).trim();
   const containerNumber = appointmentContainerNumber(appointment).trim();
@@ -1652,7 +1711,7 @@ async function renderFasahResults(query) {
         <div class="detail-item"><small>تاريخ الفسح</small><strong>${formatDate(item.clearedAt)}</strong></div>
       </div>
       ${renderAttachmentLinks(item.attachments, "مرفقات الفسح")}
-      <div class="result-card-actions">${alreadyIssued
+      <div class="result-card-actions"><button class="button button-light" data-action="edit-clearance" data-id="${escapeHtml(item.id)}" ${alreadyIssued ? "disabled title=\"لا يمكن تعديل سجل مرتبط برحلة\"" : ""}>تعديل بيانات الفسح</button>${alreadyIssued
         ? `<span class="status-pill status-neutral">تم إصدار وثيقة لهذا البيان</span>`
         : `<button class="button button-primary" data-action="issue-clearance" data-id="${escapeHtml(item.id)}" ${item.status !== "CLEARED" ? "disabled" : ""}>إنشاء طلب رحلة <span>←</span></button>`}
       </div>
@@ -2616,6 +2675,31 @@ async function exportExcel() {
   }
 }
 
+async function exportClearancesExcel() {
+  const query = $("#fasah-query").value.trim();
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  try {
+    const response = await fetch(`/api/clearances.xlsx?${params}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(API_ERRORS[payload.error] || `تعذر تصدير بيانات الفسح (${response.status}).`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `north-world-clearances-${dateOnly()}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("تم تصدير بيانات الفسح إلى Excel.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 async function handleTruckSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2656,6 +2740,8 @@ async function handleTruckSubmit(event) {
 async function handleClearanceSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const isEditing = Boolean(editingClearanceId);
+  const clearanceId = editingClearanceId;
   const values = Object.fromEntries(new FormData(form).entries());
   const appointment = pendingFasahAppointmentId
     ? (state.fasahAppointments || []).find(item => item.id === pendingFasahAppointmentId)
@@ -2675,13 +2761,19 @@ async function handleClearanceSubmit(event) {
   }
   try {
     const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
-    const clearance = await apiRequest("/api/clearances/manual", {
-      method: "POST",
-      body: { ...values, clearanceConfirmed: $("#clearance-confirmed").checked, attachments }
-    });
+    const clearance = await apiRequest(
+      isEditing ? `/api/clearances/${encodeURIComponent(clearanceId)}` : "/api/clearances/manual",
+      {
+        method: isEditing ? "PATCH" : "POST",
+        body: { ...values, clearanceConfirmed: $("#clearance-confirmed").checked, attachments }
+      }
+    );
+    editingClearanceId = null;
     pendingFasahAppointmentId = null;
     form.reset();
     $("#clearance-declaration-field").classList.remove("hidden");
+    $("#clearance-submit-button").textContent = translateText("إضافة بيانات الفسح");
+    $("#cancel-clearance-edit").classList.add("hidden");
     updateClearancePortCity();
     updateClearanceConfirmation();
     $("#clearance-form-wrap").classList.add("hidden");
@@ -2700,7 +2792,9 @@ async function handleClearanceSubmit(event) {
       else showToast("رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
       return;
     }
-    showToast("تم حفظ بيانات الفسح اليدوية. لم يتم التحقق منها لدى منصة فسح.");
+    showToast(isEditing
+      ? "تم تحديث بيانات الفسح."
+      : "تم حفظ بيانات الفسح اليدوية. لم يتم التحقق منها لدى منصة فسح.");
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2909,6 +3003,7 @@ function init() {
       $("#issue-clearance").value = action.dataset.id;
       renderSelectedClearance();
     }
+    if (action.dataset.action === "edit-clearance") beginClearanceEdit(action.dataset.id);
     if (action.dataset.action === "use-fasah-appointment") prepareTripFromFasahAppointment(action.dataset.id);
     if (action.dataset.action === "return") {
       const eir = action.closest(".archive-card")?.querySelector("[data-return-eir]")?.value || "";
@@ -2956,11 +3051,14 @@ function init() {
     else $("#truck-form-wrap").classList.toggle("hidden");
   });
   $("#toggle-clearance-form").addEventListener("click", () => {
+    if (editingClearanceId) return cancelClearanceEdit();
     pendingFasahAppointmentId = null;
     $("#clearance-declaration-field").classList.remove("hidden");
     $("#clearance-form-wrap").classList.toggle("hidden");
     updateClearanceConfirmation();
   });
+  $("#cancel-clearance-edit").addEventListener("click", cancelClearanceEdit);
+  $("#export-clearances-excel").addEventListener("click", exportClearancesExcel);
   $("#toggle-driver-form").addEventListener("click", () => {
     if (editingDriverId) cancelDriverEdit();
     else $("#driver-form-wrap").classList.toggle("hidden");

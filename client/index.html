@@ -122,7 +122,7 @@
         </section>
 
         <section class="view" id="view-fasah">
-          <div class="page-heading"><div><span class="eyebrow">السجلات الجمركية</span><h1>بيانات الفسح</h1><p>ابحث في السجلات أو ارفع تذكرة موعد فسح PDF لاستخراج بياناتها.</p></div><button id="toggle-clearance-form" class="button button-secondary" type="button">＋ إدخال بيان يدوياً</button></div>
+          <div class="page-heading"><div><span class="eyebrow">السجلات الجمركية</span><h1>بيانات الفسح</h1><p>ابحث في السجلات أو ارفع تذكرة موعد فسح PDF لاستخراج بياناتها.</p></div><div class="page-heading-actions"><button id="export-clearances-excel" class="button button-green" type="button">⇩ تصدير الفسح إلى Excel</button><button id="toggle-clearance-form" class="button button-secondary" type="button">＋ إضافة بيانات الفسح</button></div></div>
           <section class="panel fasah-appointment-import">
             <div class="panel-heading"><div><h2>رفع تذكرة موعد فسح PDF</h2><p>استخراج تفاصيل الحجز والمركبة والسائق والدخول والخروج محلياً، ثم مراجعتها قبل الحفظ.</p></div></div>
             <form id="fasah-pdf-extract-form" class="inline-form">
@@ -190,9 +190,11 @@
               <label id="clearance-port-city-field" class="field hidden">مدينة الميناء<input id="clearance-port-city" name="portCity" maxlength="120"></label>
               <label class="field">حالة الفسح<select id="clearance-status" name="status" required><option value="CLEARED" selected>مفسوح</option><option value="PENDING">قيد الإجراء</option><option value="ON_HOLD">معلق</option><option value="REJECTED">مرفوض</option></select></label>
               <label class="field">تاريخ الفسح (من تاريخ الموعد في PDF)<input name="clearedAt" type="date"></label>
+              <label class="field">رقم الرصاص الملاحي<input name="sealNumber" maxlength="64"></label>
+              <label class="field">اسم الباخرة<input name="vesselName" maxlength="120"></label>
               <label id="clearance-confirmation-wrap" class="clearance-confirmation full-field"><input id="clearance-confirmed" type="checkbox" required><span>أؤكد أن حالة الفسح وتاريخه مطابقان لإثبات فسح رسمي، وليس لتذكرة موعد فقط.</span></label>
               <label class="field full-field">مستندات الفسح (PDF أو JPG أو PNG)<input id="clearance-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small></label>
-              <button class="button button-primary" type="submit">حفظ بيانات الفسح</button>
+              <div class="inline-form-actions full-field"><button id="clearance-submit-button" class="button button-primary" type="submit">إضافة بيانات الفسح</button><button id="cancel-clearance-edit" class="button button-light hidden" type="button">إلغاء التعديل</button></div>
               <p class="search-hint full-field">هذه بيانات مدخلة يدوياً ولا يتم التحقق منها لدى منصة فسح.</p>
             </form>
           </div>

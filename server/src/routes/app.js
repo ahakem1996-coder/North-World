@@ -3,7 +3,12 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
-import { attachmentMetadata, parseManualAttachments } from "../utils/attachments.js";
+import {
+  attachmentMetadata,
+  MAX_ATTACHMENTS,
+  MAX_TOTAL_ATTACHMENT_SIZE,
+  parseManualAttachments
+} from "../utils/attachments.js";
 import {
   hasCompleteManualDocumentReference,
   manualClearanceSchema,
@@ -189,6 +194,7 @@ function mapClearance(clearance) {
     sealNumber: clearance.shippingSealNumber,
     vesselName: clearance.vesselName,
     port: clearance.port.name,
+    portCity: clearance.port.city,
     source: clearance.source,
     status: clearance.status,
     clearedAt: clearance.clearedAt?.toISOString().slice(0, 10) || null,
@@ -787,6 +793,130 @@ router.post("/clearances/manual", requireAdmin, async (req, res) => {
     return created;
   });
   res.status(201).json(mapClearance(clearance));
+});
+
+router.patch("/clearances/:id", requireAdmin, async (req, res) => {
+  const attachments = parseManualAttachments(req.body?.attachments);
+  const parsed = manualClearanceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const confirmationRequired = parsed.error.issues.some(issue => issue.path[0] === "clearanceConfirmed");
+    return res.status(400).json({
+      error: confirmationRequired ? "clearance_confirmation_required" : "invalid_manual_clearance_input"
+    });
+  }
+
+  const clearance = await prisma.$transaction(async tx => {
+    const current = await tx.customsClearance.findUnique({
+      where: { id: req.params.id },
+      include: {
+        container: true,
+        trip: { select: { id: true } },
+        attachments: { select: { id: true, size: true } }
+      }
+    });
+    if (!current) return null;
+    if (current.trip) {
+      throw Object.assign(new Error("clearance_has_trip"), {
+        statusCode: 409,
+        publicCode: "clearance_has_trip"
+      });
+    }
+
+    const duplicateDeclaration = await tx.customsClearance.findFirst({
+      where: { declarationNumber: parsed.data.declarationNumber, id: { not: current.id } },
+      select: { id: true }
+    });
+    if (duplicateDeclaration) {
+      throw Object.assign(new Error("record_already_exists"), {
+        statusCode: 409,
+        publicCode: "record_already_exists"
+      });
+    }
+
+    if (current.attachments.length + attachments.length > MAX_ATTACHMENTS) {
+      throw Object.assign(new Error("attachment_count_exceeded"), {
+        statusCode: 400,
+        publicCode: "attachment_count_exceeded"
+      });
+    }
+    if (current.attachments.reduce((total, attachment) => total + attachment.size, 0) +
+        attachments.reduce((total, attachment) => total + attachment.size, 0) > MAX_TOTAL_ATTACHMENT_SIZE) {
+      throw Object.assign(new Error("attachment_size_exceeded"), {
+        statusCode: 400,
+        publicCode: "attachment_size_exceeded"
+      });
+    }
+
+    const port = await tx.port.upsert({
+      where: { name: parsed.data.portName },
+      create: { name: parsed.data.portName, city: parsed.data.portCity },
+      update: { city: parsed.data.portCity }
+    });
+    let container = await tx.container.findUnique({
+      where: { containerNumber: parsed.data.containerNumber }
+    });
+    if (container && (container.size !== parsed.data.size || container.type !== parsed.data.type)) {
+      const [otherClearances, trips] = await Promise.all([
+        tx.customsClearance.count({ where: { containerId: container.id, id: { not: current.id } } }),
+        tx.trip.count({ where: { containerId: container.id } })
+      ]);
+      if (otherClearances || trips) {
+        throw Object.assign(new Error("container_details_conflict"), {
+          statusCode: 409,
+          publicCode: "container_details_conflict"
+        });
+      }
+      container = await tx.container.update({
+        where: { id: container.id },
+        data: { size: parsed.data.size, type: parsed.data.type }
+      });
+    } else if (!container) {
+      container = await tx.container.create({
+        data: {
+          containerNumber: parsed.data.containerNumber,
+          size: parsed.data.size,
+          type: parsed.data.type
+        }
+      });
+    }
+
+    const updated = await tx.customsClearance.update({
+      where: { id: current.id },
+      data: {
+        declarationNumber: parsed.data.declarationNumber,
+        status: parsed.data.status,
+        clearedAt: parsed.data.clearedAt
+          ? new Date(`${parsed.data.clearedAt}T00:00:00.000Z`)
+          : null,
+        vesselName: parsed.data.vesselName || null,
+        shippingSealNumber: parsed.data.sealNumber || null,
+        containerId: container.id,
+        portId: port.id,
+        ...(attachments.length ? { attachments: { create: attachments } } : {})
+      },
+      include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } }
+    });
+
+    if (current.containerId !== container.id) {
+      const [otherClearances, trips] = await Promise.all([
+        tx.customsClearance.count({ where: { containerId: current.containerId } }),
+        tx.trip.count({ where: { containerId: current.containerId } })
+      ]);
+      if (!otherClearances && !trips) {
+        await tx.container.delete({ where: { id: current.containerId } });
+      }
+    }
+    await writeAudit(tx, req, "clearance.updated", "CustomsClearance", updated.id, {
+      declarationNumber: updated.declarationNumber,
+      containerNumber: container.containerNumber,
+      status: updated.status,
+      attachmentCount: attachments.length
+    });
+    return updated;
+  }, { isolationLevel: "Serializable" });
+
+  if (!clearance) return res.status(404).json({ error: "record_not_found" });
+  res.json(mapClearance(clearance));
 });
 
 router.post("/trucks", requireAdmin, async (req, res) => {
@@ -1439,6 +1569,87 @@ router.post("/trips/:id/return", requireAdmin, async (req, res) => {
     return updated;
   }, { isolationLevel: "Serializable" });
   res.json(mapTrip(trip));
+});
+
+router.get("/clearances.xlsx", requireAdmin, async (req, res) => {
+  const parsed = z.object({
+    q: z.string().trim().max(100).optional().default("")
+  }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_search_query" });
+
+  const query = parsed.data.q;
+  const clearances = await prisma.customsClearance.findMany({
+    where: query ? {
+      OR: [
+        { declarationNumber: { contains: query, mode: "insensitive" } },
+        { container: { is: { containerNumber: { contains: query, mode: "insensitive" } } } }
+      ]
+    } : {},
+    include: { container: true, port: true, attachments: { select: { id: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("بيانات الفسح", { views: [{ rightToLeft: true }] });
+  sheet.columns = [
+    { header: "تاريخ تسجيل العملية", key: "createdAt", width: 22 },
+    { header: "تاريخ الفسح", key: "clearedAt", width: 18 },
+    { header: "رقم البيان الجمركي", key: "declarationNumber", width: 24 },
+    { header: "رقم الحاوية", key: "containerNumber", width: 20 },
+    { header: "المقاس", key: "size", width: 14 },
+    { header: "نوع الحاوية", key: "type", width: 20 },
+    { header: "رقم الرصاص الملاحي", key: "sealNumber", width: 22 },
+    { header: "اسم الباخرة", key: "vesselName", width: 26 },
+    { header: "الميناء", key: "port", width: 24 },
+    { header: "مدينة الميناء", key: "portCity", width: 20 },
+    { header: "حالة الفسح", key: "status", width: 18 },
+    { header: "مصدر البيانات", key: "source", width: 20 },
+    { header: "عدد المرفقات", key: "attachmentCount", width: 16 }
+  ];
+  sheet.views = [{ rightToLeft: true, state: "frozen", ySplit: 1 }];
+  sheet.autoFilter = { from: "A1", to: "M1" };
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF17324D" } };
+  sheet.getColumn(1).numFmt = "yyyy-mm-dd hh:mm";
+  sheet.getColumn(2).numFmt = "yyyy-mm-dd";
+  const clearanceStatuses = {
+    CLEARED: "مفسوح",
+    PENDING: "قيد الإجراء",
+    ON_HOLD: "معلق",
+    REJECTED: "مرفوض"
+  };
+  const containerTypes = {
+    DRY: "جاف",
+    REFRIGERATED: "مبرد",
+    OPEN_TOP: "سقف مفتوح",
+    FLAT_RACK: "مسطح",
+    TANK: "صهريج",
+    OTHER: "أخرى"
+  };
+  const clearanceSources = {
+    MANUAL: "إدخال يدوي",
+    OFFICIAL_INTEGRATION: "تكامل رسمي"
+  };
+  for (const clearance of clearances) {
+    sheet.addRow({
+      createdAt: clearance.createdAt,
+      clearedAt: clearance.clearedAt || "",
+      declarationNumber: clearance.declarationNumber,
+      containerNumber: clearance.container.containerNumber,
+      size: clearance.container.size === "FT_20" ? "20 قدم" : "40 قدم",
+      type: containerTypes[clearance.container.type] || "أخرى",
+      sealNumber: clearance.shippingSealNumber || "",
+      vesselName: clearance.vesselName || "",
+      port: clearance.port.name,
+      portCity: clearance.port.city,
+      status: clearanceStatuses[clearance.status] || clearance.status,
+      source: clearanceSources[clearance.source] || clearance.source,
+      attachmentCount: clearance.attachments.length
+    });
+  }
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="north-world-clearances-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+  await workbook.xlsx.write(res);
+  res.end();
 });
 
 router.get("/reports.xlsx", requireAdmin, async (req, res) => {
