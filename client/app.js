@@ -102,7 +102,8 @@ const TRANSLATIONS = Object.freeze({
   "تم تسجيل بيانات الحاوية من التذكرة والانتقال إلى إصدار الرحلة.": "Container details were recorded from the ticket and the trip form is ready.",
   "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً.": "The Fasah appointment and PDF were saved, and the clearance form was filled automatically.",
   "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
-  "تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.": "Declaration, container, and port were filled from the ticket. Size defaults to 40 feet; container type and clearance date are not provided by the appointment ticket, so enter them manually.",
+  "تم ملء البيان والحاوية واسم الميناء وتاريخ الموعد من PDF. المقاس افتراضياً 40 قدم؛ أدخل نوع الحاوية وراجع التاريخ وفق إثبات الفسح الرسمي.": "Declaration, container, port name, and appointment date were filled from the PDF. Size defaults to 40 feet; enter the container type and verify the date against official clearance proof.",
+  "تاريخ الفسح (من تاريخ الموعد في PDF)": "Clearance date (from the PDF appointment date)",
   "جلب أحدث بيانات مستخرجة من PDF": "Load latest data extracted from PDF",
   "سيتم استخدام أحدث تذكرة تم استخراج بياناتها.": "The most recently extracted PDF ticket will be used.",
   "لا توجد بيانات PDF محفوظة. ارفع تذكرة فسح واستخرج بياناتها أولاً.": "No PDF data is saved. Upload and extract a Fasah ticket first.",
@@ -804,11 +805,6 @@ const CONTAINER_TYPES = {
   TANK: "صهريج",
   OTHER: "أخرى"
 };
-const PORT_CITIES = {
-  "ميناء جدة الإسلامي": "جدة",
-  "ميناء الملك عبدالله": "مدينة الملك عبدالله الاقتصادية",
-  "الدمام": "الدمام"
-};
 const CLEARANCE_LABELS = {
   CLEARED: { text: "مفسوح", className: "status-issued" },
   PENDING: { text: "قيد الإجراء", className: "status-pending" },
@@ -1442,11 +1438,24 @@ function normalizeContainerNumber(value) {
 }
 
 function appointmentPortName(portName) {
-  const value = String(portName || "").toLocaleLowerCase("en");
-  if (value.includes("جدة") || value.includes("jeddah")) return "ميناء جدة الإسلامي";
-  if (value.includes("الملك عبدالله") || value.includes("king abdullah")) return "ميناء الملك عبدالله";
-  if (value.includes("الدمام") || value.includes("dammam")) return "الدمام";
+  return String(portName || "").trim();
+}
+
+function portCityFromName(portName) {
+  const value = String(portName || "").normalize("NFKC").toLocaleLowerCase("en");
+  if (value.includes("جدة") || value.includes("jeddah")) return "جدة";
+  if (value.includes("الملك عبدالله") || value.includes("king abdullah")) return "مدينة الملك عبدالله الاقتصادية";
+  if (value.includes("الدمام") || value.includes("dammam") || value.includes("king abdulaziz")) return "الدمام";
   return "";
+}
+
+function updateClearancePortCity() {
+  const portName = $("#clearance-port").value.trim();
+  const city = portCityFromName($("#clearance-port").value);
+  const cityInput = $("#clearance-port-city");
+  cityInput.value = city;
+  cityInput.required = Boolean(portName && !city);
+  $("#clearance-port-city-field").classList.toggle("hidden", Boolean(city) || !portName);
 }
 
 function fillClearanceFormFromAppointment(appointment, appointmentId = null, resetForm = true) {
@@ -1463,17 +1472,18 @@ function fillClearanceFormFromAppointment(appointment, appointmentId = null, res
     form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
     form.elements.namedItem("type").value = appointment.containerType || "";
     form.elements.namedItem("status").value = "CLEARED";
-    form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
   }
+  const appointmentDate = appointment.clearedAt || appointment.appointmentDate || "";
+  if (appointmentDate || resetForm) form.elements.namedItem("clearedAt").value = appointmentDate;
   if (resetForm || declarationNumber) {
     $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
   }
   $("#clearance-confirmed").checked = false;
-  const portSelect = $("#clearance-port");
+  const portInput = $("#clearance-port");
   const portName = appointmentPortName(appointment.portName);
   if (resetForm || portName) {
-    portSelect.value = portName;
-    portSelect.dispatchEvent(new Event("change"));
+    portInput.value = portName;
+    updateClearancePortCity();
   }
   updateClearanceConfirmation();
   $("#clearance-form-wrap").classList.remove("hidden");
@@ -1589,7 +1599,7 @@ function prepareTripFromFasahAppointment(id) {
   }
 
   fillClearanceFormFromAppointment(appointment, appointment.id);
-  showToast("تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.");
+  showToast("تم ملء البيان والحاوية واسم الميناء وتاريخ الموعد من PDF. المقاس افتراضياً 40 قدم؛ أدخل نوع الحاوية وراجع التاريخ وفق إثبات الفسح الرسمي.");
   $("#clearance-form").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -2672,6 +2682,7 @@ async function handleClearanceSubmit(event) {
     pendingFasahAppointmentId = null;
     form.reset();
     $("#clearance-declaration-field").classList.remove("hidden");
+    updateClearancePortCity();
     updateClearanceConfirmation();
     $("#clearance-form-wrap").classList.add("hidden");
     await refreshServerState();
@@ -2726,7 +2737,7 @@ async function handleFasahPdfPreview(event) {
       : translateText("تم استخراج البيانات؛ راجعها ثم احفظ السجل.");
     message.classList.remove("hidden");
     if (clearanceFieldsComplete) {
-      showToast("تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.");
+      showToast("تم ملء البيان والحاوية واسم الميناء وتاريخ الموعد من PDF. المقاس افتراضياً 40 قدم؛ أدخل نوع الحاوية وراجع التاريخ وفق إثبات الفسح الرسمي.");
     }
   } catch (error) {
     showToast(error.message, true);
@@ -2926,9 +2937,7 @@ function init() {
   $("#fasah-appointment-cancel").addEventListener("click", cancelFasahAppointmentPreview);
   $("#clearance-form").addEventListener("submit", handleClearanceSubmit);
   $("#clearance-fetch-latest-pdf").addEventListener("click", fillClearanceFromLatestPdf);
-  $("#clearance-port").addEventListener("change", event => {
-    $("#clearance-port-city").value = PORT_CITIES[event.target.value] || "";
-  });
+  $("#clearance-port").addEventListener("input", updateClearancePortCity);
   $("#clearance-status").addEventListener("change", updateClearanceConfirmation);
   $("#issue-clearance").addEventListener("change", renderSelectedClearance);
   $("#issue-truck").addEventListener("change", () => syncIssueTruckDriver("truck"));
