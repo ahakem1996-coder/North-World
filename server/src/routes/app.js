@@ -858,13 +858,14 @@ router.patch("/trucks/:id", requireAdmin, async (req, res) => {
       throw Object.assign(new Error("record_not_found"), { statusCode: 404, publicCode: "record_not_found" });
     }
     const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
-    if (identityFields.some(field => parsed.data[field] !== undefined)) {
+    const changedIdentityFields = identityFields.filter(field =>
+      parsed.data[field] !== undefined && parsed.data[field] !== current[field]
+    );
+    if (changedIdentityFields.length) {
       const duplicate = await tx.truck.findFirst({
         where: {
           id: { not: current.id },
-          OR: identityFields
-            .filter(field => parsed.data[field] !== undefined)
-            .map(field => ({ [field]: parsed.data[field] }))
+          OR: changedIdentityFields.map(field => ({ [field]: parsed.data[field] }))
         },
         select: { id: true }
       });

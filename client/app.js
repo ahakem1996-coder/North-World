@@ -88,6 +88,24 @@ const TRANSLATIONS = Object.freeze({
   "الرقم المرجعي للحجز": "Booking Reference Number",
   "رقم لوحة المركبة": "Vehicle Plate Number",
   "رقم البيان": "Declaration Number",
+  "جوال السائق": "Driver Phone",
+  "اختر المقاس": "Select size",
+  "اختر النوع": "Select type",
+  "اختر حالة الفسح": "Select clearance status",
+  "استخدام بيانات الموعد للرحلة": "Use Appointment for Trip",
+  "تذكرة الموعد لا تثبت الفسح. أكمل المقاس والنوع وحالة الفسح وتاريخها بعد التحقق.": "The appointment ticket does not prove customs clearance. Enter the size, type, clearance status, and date after verification.",
+  "رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.": "The ticket phone does not match exactly one active driver with an account.",
+  "تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.": "The driver matched, but no available truck is assigned to them.",
+  "الحاوية مرتبطة ببيان جمركي مختلف عن بيانات الموعد.": "This container is linked to a different customs declaration than the appointment.",
+  "الحاوية مسجلة لكن حالة الفسح ليست مفسوحة، لذلك لا يمكن إصدار طلب رحلة.": "The container is registered but not cleared, so a trip request cannot be issued.",
+  "تعذر العثور على موعد فسح محفوظ.": "Could not find a saved Fasah appointment.",
+  "لا تتضمن التذكرة رقم بيان وحاوية صالحين.": "The ticket does not contain a valid declaration and container number.",
+  "تم تسجيل بيانات الحاوية من التذكرة والانتقال إلى إصدار الرحلة.": "Container details were recorded from the ticket and the trip form is ready.",
+  "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
+  "تم إصدار وثيقة لهذا البيان.": "A document has already been issued for this declaration.",
+  "أدخل تاريخ الفسح للحاوية المفسوحة.": "Enter the clearance date for a cleared container.",
+  "لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.": "Appointment details cannot be used to create a trip until clearance is confirmed.",
+  "تم حفظ بيانات الحاوية من الموعد، ومطابقة جوال السائق.": "Container details were saved from the appointment, and the driver's phone was matched.",
   "بوليصة الدخول": "Entry BL Number",
   "بيان الدخول": "Entry Declaration Number",
   "حاوية الدخول": "Entry Container Number",
@@ -807,6 +825,7 @@ let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], p
 let toastTimer;
 let currentAccount = null;
 let fasahSearchSequence = 0;
+let pendingFasahAppointmentId = null;
 let editingAccountId = null;
 let editingTruckId = null;
 let editingDriverId = null;
@@ -1364,6 +1383,7 @@ function renderFasahAppointmentCard(appointment) {
     <div class="result-card-head"><div><h3>${translateText("موعد فسح")}: ${escapeHtml(appointment.bookingReferenceNumber)}</h3><p>${escapeHtml(appointment.portName || "—")} · ${formatDate(appointment.appointmentDate)}</p></div><span class="status-pill status-neutral">${translateText("موعد محفوظ")}</span></div>
     <div class="result-details">${details.map(([label, value]) => `<div class="detail-item"><small>${translateText(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>
     ${renderAttachmentLinks(appointment.attachments, "ملف PDF الأصلي")}
+    <div class="result-card-actions"><button class="button button-primary" data-action="use-fasah-appointment" data-id="${escapeHtml(appointment.id)}">${translateText("استخدام بيانات الموعد للرحلة")}</button></div>
   </article>`;
 }
 
@@ -1385,6 +1405,109 @@ function renderFasahAppointments() {
       <td>${escapeHtml(appointment.exitBlNumber || "—")}<br>${escapeHtml(appointment.exitCargoType || "—")}</td>
       <td>${renderAttachmentLinks(appointment.attachments, "ملف PDF الأصلي") || "—"}</td>
     </tr>`).join("") : `<tr><td colspan="7" class="empty-row">${translateText(query ? "لم يُعثر على مواعيد فسح مطابقة." : "لا توجد مواعيد فسح محفوظة.")}</td></tr>`;
+}
+
+function appointmentDeclarationNumber(appointment) {
+  return appointment.exitDeclarationNumber || appointment.entryDeclarationNumber || "";
+}
+
+function appointmentContainerNumber(appointment) {
+  return appointment.exitContainerNumber || appointment.entryContainerNumber || "";
+}
+
+function normalizeContainerNumber(value) {
+  return String(value || "").trim().toLocaleUpperCase("en").replace(/\s/g, "");
+}
+
+function appointmentPortName(portName) {
+  const value = String(portName || "").toLocaleLowerCase("en");
+  if (value.includes("جدة") || value.includes("jeddah")) return "ميناء جدة الإسلامي";
+  if (value.includes("الملك عبدالله") || value.includes("king abdullah")) return "ميناء الملك عبدالله";
+  if (value.includes("الدمام") || value.includes("dammam")) return "الدمام";
+  return "";
+}
+
+function normalizePhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("00966")) return `0${digits.slice(5)}`;
+  if (digits.startsWith("966")) return `0${digits.slice(3)}`;
+  if (digits.length === 9 && digits.startsWith("5")) return `0${digits}`;
+  return digits;
+}
+
+function matchIssueDriverFromAppointment(appointment) {
+  const phone = normalizePhoneNumber(appointment.driverMobileNumber);
+  if (!phone) return "unmatched";
+  const matches = state.drivers.filter(driver =>
+    !driver.deletedAt && driver.isActive && hasActiveDriverAccount(driver.id) &&
+    normalizePhoneNumber(driver.phone) === phone
+  );
+  if (matches.length !== 1) return "unmatched";
+
+  $("#issue-driver").value = matches[0].id;
+  syncIssueTruckDriver("driver", false);
+  return $("#issue-truck").value ? "matched" : "no_available_truck";
+}
+
+function resetAppointmentIssueContext() {
+  $("#issue-truck").value = "";
+  $("#issue-driver").value = "";
+  $("#issue-customer").value = "";
+  $("#issue-destination").value = "";
+  $("#issue-return-date").value = "";
+}
+
+function prepareTripFromFasahAppointment(id) {
+  const appointment = (state.fasahAppointments || []).find(item => item.id === id);
+  if (!appointment) return showToast("تعذر العثور على موعد فسح محفوظ.", true);
+
+  const declarationNumber = appointmentDeclarationNumber(appointment).trim();
+  const containerNumber = appointmentContainerNumber(appointment).trim();
+  if (!declarationNumber || !containerNumber) {
+    return showToast("لا تتضمن التذكرة رقم بيان وحاوية صالحين.", true);
+  }
+
+  const matchingClearances = state.clearances.filter(item =>
+    normalizeContainerNumber(item.containerNumber) === normalizeContainerNumber(containerNumber)
+  );
+  if (matchingClearances.length) {
+    const clearance = matchingClearances[0];
+    if (clearance.declarationNumber.trim() !== declarationNumber) {
+      return showToast("الحاوية مرتبطة ببيان جمركي مختلف عن بيانات الموعد.", true);
+    }
+    if (clearance.status !== "CLEARED") {
+      return showToast("الحاوية مسجلة لكن حالة الفسح ليست مفسوحة، لذلك لا يمكن إصدار طلب رحلة.", true);
+    }
+    if (state.docs.some(doc => doc.clearanceId === clearance.id)) {
+      return showToast("تم إصدار وثيقة لهذا البيان.");
+    }
+
+    switchView("issue");
+    resetAppointmentIssueContext();
+    populateIssueOptions(clearance.id);
+    $("#issue-clearance").value = clearance.id;
+    renderSelectedClearance();
+    const driverMatch = matchIssueDriverFromAppointment(appointment);
+    if (driverMatch === "matched") showToast("تم مطابقة رقم الجوال مع السائق المسجل.");
+    else if (driverMatch === "no_available_truck") showToast("تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.", true);
+    else showToast("رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
+    return;
+  }
+
+  pendingFasahAppointmentId = appointment.id;
+  const form = $("#clearance-form");
+  form.reset();
+  form.elements.namedItem("declarationNumber").value = declarationNumber;
+  form.elements.namedItem("containerNumber").value = containerNumber;
+  form.elements.namedItem("size").value = "";
+  form.elements.namedItem("type").value = "";
+  form.elements.namedItem("status").value = "";
+  const portSelect = $("#clearance-port");
+  portSelect.value = appointmentPortName(appointment.portName);
+  portSelect.dispatchEvent(new Event("change"));
+  $("#clearance-form-wrap").classList.remove("hidden");
+  showToast("تذكرة الموعد لا تثبت الفسح. أكمل المقاس والنوع وحالة الفسح وتاريخها بعد التحقق.");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function renderFasahResults(query) {
@@ -1478,6 +1601,19 @@ function populateIssueOptions(selectedId = "") {
   else if (driverSelect.value) syncIssueTruckDriver("driver", false);
   if (!$("#issue-return-date").value) $("#issue-return-date").value = dateOffset(5);
   renderSelectedClearance();
+  renderSelectedDriverContact();
+}
+
+function renderSelectedDriverContact() {
+  const container = $("#issue-driver-contact");
+  const driver = driverById($("#issue-driver").value);
+  if (!driver) {
+    container.classList.add("hidden");
+    container.textContent = "";
+    return;
+  }
+  container.classList.remove("hidden");
+  container.innerHTML = `${translateText("جوال السائق")}: <strong>${escapeHtml(driver.phone || "—")}</strong>`;
 }
 
 function syncIssueTruckDriver(source, notify = true) {
@@ -1492,6 +1628,7 @@ function syncIssueTruckDriver(source, notify = true) {
       hasActiveDriverAccount(item.id)
     );
     driverSelect.value = driver?.id || "";
+    renderSelectedDriverContact();
     if (truck && !driver && notify) {
       showToast("الشاحنة المحددة لا ترتبط بسائق نشط له حساب. حدّث تعيين السائق من شاشة الأسطول.", true);
     }
@@ -1502,9 +1639,11 @@ function syncIssueTruckDriver(source, notify = true) {
   const matches = availableTrucks.filter(item => item.driverId === driverId);
   if (matches.length === 1) {
     truckSelect.value = matches[0].id;
+    renderSelectedDriverContact();
     return;
   }
   truckSelect.value = "";
+  renderSelectedDriverContact();
   if (driverId && notify) {
     showToast(matches.length > 1
       ? "توجد أكثر من شاحنة متاحة مرتبطة بهذا السائق. اختر الشاحنة يدوياً."
@@ -2389,11 +2528,16 @@ async function handleTruckSubmit(event) {
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
   if (!driverById(values.driverId)?.isActive) return showToast("اختر سائقاً نشطاً للسيارة.", true);
-  if (state.trucks.some(item => !item.deletedAt && item.id !== editingTruckId && (
-    item.fleetNumber.toLowerCase() === values.fleetNumber.trim().toLowerCase() ||
-    item.plateNumber.toLowerCase() === values.plateNumber.trim().toLowerCase() ||
-    item.serialNumber.toLowerCase() === values.serialNumber.trim().toLowerCase()
-  ))) {
+  const currentTruck = editingTruckId ? truckById(editingTruckId) : null;
+  const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
+  const duplicate = state.trucks.some(item => item.id !== editingTruckId && identityFields.some(field => {
+    const submittedValue = values[field].trim().toLowerCase();
+    const unchanged = currentTruck && submittedValue === currentTruck[field].toLowerCase();
+    return !unchanged &&
+      (currentTruck || !item.deletedAt) &&
+      item[field].toLowerCase() === submittedValue;
+  }));
+  if (duplicate) {
     return showToast(editingTruckId ? "بيانات الشاحنة مسجلة مسبقاً." : "رقم الأسطول أو اللوحة أو الرقم التسلسلي مسجل مسبقاً.", true);
   }
   try {
@@ -2420,20 +2564,39 @@ async function handleClearanceSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
+  if (pendingFasahAppointmentId && values.status !== "CLEARED") {
+    return showToast("لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.", true);
+  }
   if (values.status === "CLEARED" && !values.clearedAt) {
     return showToast("أدخل تاريخ الفسح للحاوية المفسوحة.", true);
   }
+  const appointment = pendingFasahAppointmentId
+    ? (state.fasahAppointments || []).find(item => item.id === pendingFasahAppointmentId)
+    : null;
   try {
     const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
     const clearance = await apiRequest("/api/clearances/manual", {
       method: "POST",
       body: { ...values, attachments }
     });
+    pendingFasahAppointmentId = null;
     form.reset();
     $("#clearance-form-wrap").classList.add("hidden");
     await refreshServerState();
     $("#fasah-query").value = clearance.declarationNumber;
     await renderFasahResults(clearance.declarationNumber);
+    if (appointment && clearance.status === "CLEARED") {
+      switchView("issue");
+      resetAppointmentIssueContext();
+      populateIssueOptions(clearance.id);
+      $("#issue-clearance").value = clearance.id;
+      renderSelectedClearance();
+      const driverMatch = matchIssueDriverFromAppointment(appointment);
+      if (driverMatch === "matched") showToast("تم حفظ بيانات الحاوية من الموعد، ومطابقة جوال السائق.");
+      else if (driverMatch === "no_available_truck") showToast("تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.", true);
+      else showToast("رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
+      return;
+    }
     showToast("تم حفظ بيانات الفسح اليدوية. لم يتم التحقق منها لدى منصة فسح.");
   } catch (error) {
     showToast(error.message, true);
@@ -2618,6 +2781,7 @@ function init() {
       $("#issue-clearance").value = action.dataset.id;
       renderSelectedClearance();
     }
+    if (action.dataset.action === "use-fasah-appointment") prepareTripFromFasahAppointment(action.dataset.id);
     if (action.dataset.action === "return") {
       const eir = action.closest(".archive-card")?.querySelector("[data-return-eir]")?.value || "";
       recordReturn(action.dataset.id, eir);
@@ -2663,7 +2827,10 @@ function init() {
     if (editingTruckId) cancelTruckEdit();
     else $("#truck-form-wrap").classList.toggle("hidden");
   });
-  $("#toggle-clearance-form").addEventListener("click", () => $("#clearance-form-wrap").classList.toggle("hidden"));
+  $("#toggle-clearance-form").addEventListener("click", () => {
+    pendingFasahAppointmentId = null;
+    $("#clearance-form-wrap").classList.toggle("hidden");
+  });
   $("#toggle-driver-form").addEventListener("click", () => {
     if (editingDriverId) cancelDriverEdit();
     else $("#driver-form-wrap").classList.toggle("hidden");

@@ -182,13 +182,13 @@
             <form id="clearance-form" class="inline-form">
               <label class="field">رقم البيان الجمركي<input name="declarationNumber" required maxlength="64"></label>
               <label class="field">رقم الحاوية<input name="containerNumber" required maxlength="32"></label>
-              <label class="field">المقاس<select name="size" required><option value="FT_20">20 قدم</option><option value="FT_40">40 قدم</option></select></label>
-              <label class="field">نوع الحاوية<select name="type" required><option value="DRY">جافة</option><option value="REFRIGERATED">مبردة</option><option value="OPEN_TOP">سقف مفتوح</option><option value="FLAT_RACK">مسطحة</option><option value="TANK">صهريج</option><option value="OTHER">أخرى</option></select></label>
+              <label class="field">المقاس<select name="size" required><option value="" selected>اختر المقاس</option><option value="FT_20">20 قدم</option><option value="FT_40">40 قدم</option></select></label>
+              <label class="field">نوع الحاوية<select name="type" required><option value="" selected>اختر النوع</option><option value="DRY">جافة</option><option value="REFRIGERATED">مبردة</option><option value="OPEN_TOP">سقف مفتوح</option><option value="FLAT_RACK">مسطحة</option><option value="TANK">صهريج</option><option value="OTHER">أخرى</option></select></label>
               <label class="field">رقم الرصاص الملاحي<input name="sealNumber" maxlength="64"></label>
               <label class="field">اسم الباخرة<input name="vesselName" maxlength="120"></label>
               <label class="field">اسم الميناء<select id="clearance-port" name="portName" required><option value="">اختر الميناء</option><option value="ميناء جدة الإسلامي">ميناء جدة الإسلامي</option><option value="ميناء الملك عبدالله">ميناء الملك عبدالله</option><option value="الدمام">الدمام</option></select></label>
               <label class="field">مدينة الميناء<input id="clearance-port-city" name="portCity" required maxlength="120"></label>
-              <label class="field">حالة الفسح<select name="status" required><option value="CLEARED">مفسوح</option><option value="PENDING">قيد الإجراء</option><option value="ON_HOLD">معلق</option><option value="REJECTED">مرفوض</option></select></label>
+              <label class="field">حالة الفسح<select name="status" required><option value="" selected>اختر حالة الفسح</option><option value="CLEARED">مفسوح</option><option value="PENDING">قيد الإجراء</option><option value="ON_HOLD">معلق</option><option value="REJECTED">مرفوض</option></select></label>
               <label class="field">تاريخ الفسح<input name="clearedAt" type="date"></label>
               <label class="field full-field">مستندات الفسح (PDF أو JPG أو PNG)<input id="clearance-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small></label>
               <button class="button button-primary" type="submit">حفظ بيانات الفسح</button>
@@ -216,6 +216,7 @@
               <div class="form-grid">
                 <label class="field">الشاحنة<select id="issue-truck" required></select></label>
                 <label class="field">السائق<select id="issue-driver" required></select></label>
+                <div id="issue-driver-contact" class="selected-clearance full-field hidden"></div>
                 <label class="field">الشركة المستلمة<input id="issue-customer" required placeholder="مثال: شركة العميل"></label>
                 <label class="field">وجهة التسليم<input id="issue-destination" required placeholder="المدينة أو المستودع"></label>
                 <label class="field">موعد إعادة الحاوية الفارغة<input id="issue-return-date" type="date"></label>
