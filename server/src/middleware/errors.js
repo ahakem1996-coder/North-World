@@ -5,6 +5,12 @@ export function notFound(req, res) {
 export function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
 
+  if (error?.type === "entity.too.large") {
+    return res.status(413).json({ error: "request_too_large" });
+  }
+  if (error?.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "invalid_request_body" });
+  }
   if (error?.publicCode) {
     return res.status(error.statusCode || 400).json({ error: error.publicCode });
   }

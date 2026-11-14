@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
-import { requireAuth, requireSameOrigin } from "./middleware/auth.js";
+import { requireAdmin, requireAuth, requireSameOrigin } from "./middleware/auth.js";
 import { errorHandler, notFound } from "./middleware/errors.js";
+import { MAX_ATTACHMENT_REQUEST_SIZE } from "./utils/attachments.js";
 import authRoutes from "./routes/auth.js";
 import appRoutes from "./routes/app.js";
 
@@ -22,8 +23,10 @@ app.use(helmet({
   },
   strictTransportSecurity: env.NODE_ENV === "production" ? undefined : false
 }));
-app.use(express.json({ limit: "256kb" }));
 app.use(requireSameOrigin);
+app.post("/api/clearances/manual", requireAuth, requireAdmin, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
+app.post("/api/trips", requireAuth, requireAdmin, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
+app.use(express.json({ limit: "256kb" }));
 
 app.get("/api/health/live", (req, res) => res.json({ status: "ok" }));
 app.get("/api/health/ready", async (req, res) => {
@@ -31,7 +34,7 @@ app.get("/api/health/ready", async (req, res) => {
   res.json({ status: "ready" });
 });
 app.use("/api/auth", authRoutes);
-app.use("/api", requireAuth, appRoutes);
+app.use("/api", (req, res, next) => req.user ? next() : requireAuth(req, res, next), appRoutes);
 app.get("/api/integrations", requireAuth, (req, res) => {
   res.json({
     fasah: { status: "DISCONNECTED", message: "Official adapter is not configured." },

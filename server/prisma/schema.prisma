@@ -221,6 +221,7 @@ model CustomsClearance {
   container         Container       @relation(fields: [containerId], references: [id], onDelete: Restrict)
   port              Port            @relation(fields: [portId], references: [id], onDelete: Restrict)
   trip              Trip?
+  attachments       OperationAttachment[]
 
   @@index([status, clearedAt])
   @@index([portId, createdAt])
@@ -285,8 +286,25 @@ model TransportDocument {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   trip              Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  attachments       OperationAttachment[]
 
   @@index([status, issuedAt])
+}
+
+model OperationAttachment {
+  id                  String             @id @default(cuid())
+  originalName        String
+  contentType         String
+  size                Int
+  data                Bytes
+  clearanceId         String?
+  transportDocumentId String?
+  createdAt           DateTime           @default(now())
+  clearance           CustomsClearance?  @relation(fields: [clearanceId], references: [id], onDelete: Cascade)
+  transportDocument   TransportDocument? @relation(fields: [transportDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([clearanceId, createdAt])
+  @@index([transportDocumentId, createdAt])
 }
 
 model IntegrationHealth {

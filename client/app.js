@@ -133,6 +133,22 @@ const TRANSLATIONS = Object.freeze({
   "أدخل تاريخ الفسح للحاوية المفسوحة.": "Enter the clearance date for a cleared container.",
   "أدخل رقم الوثيقة وتاريخها معاً أو اتركهما فارغين.": "Enter both the document number and date, or leave both blank.",
   "هذه الوثيقة مسجلة يدوياً ولا توجد لها نسخة PDF مرفقة.": "This document was entered manually and has no attached PDF.",
+  "تحقق من الملفات المرفقة وصيغها.": "Check the attached files and their formats.",
+  "حجم الملف الواحد لا يتجاوز 5 MB وإجمالي الملفات لا يتجاوز 8 MB.": "Each file must be 5 MB or smaller, and all files must total 8 MB or less.",
+  "لا تملك صلاحية تنزيل هذا المرفق.": "You are not allowed to download this attachment.",
+  "حجم الطلب أكبر من الحد المسموح. قلّل حجم المرفقات.": "The request exceeds the maximum size. Reduce the attachment size.",
+  "تعذر قراءة بيانات الطلب.": "The request data could not be read.",
+  "مستندات الفسح (PDF أو JPG أو PNG)": "Clearance Documents (PDF, JPG, or PNG)",
+  "مستندات وثيقة النقل (PDF أو JPG أو PNG)": "Transport Document Files (PDF, JPG, or PNG)",
+  "حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).": "Up to 4 files, 8 MB total (up to 5 MB per file).",
+  "المرفقات المحفوظة": "Saved Attachments",
+  "مرفقات الفسح": "Clearance attachments",
+  "مرفقات وثيقة النقل": "Transport document attachments",
+  "تنزيل": "Download",
+  "اختر 4 ملفات كحد أقصى.": "Choose no more than 4 files.",
+  "حجم الملف الواحد لا يتجاوز 5 MB.": "Each file must be 5 MB or smaller.",
+  "إجمالي المرفقات لا يتجاوز 8 MB.": "Attachments must total 8 MB or less.",
+  "ارفع ملفات PDF أو JPG أو PNG فقط.": "Upload PDF, JPG, or PNG files only.",
   "خدمات المنصات": "Platform Services",
   "ابحث عن بيانات الحاوية والبيان الجمركي — بيانات تجريبية.": "Search container and customs declaration details — demo data.",
   "خدمة محاكاة فسح": "Fasah simulation service",
@@ -728,6 +744,13 @@ const API_ERRORS = {
   active_driver_required: "اختر سائقاً نشطاً.",
   driver_account_required: "أنشئ حساباً للسائق المحدد قبل تعيين رحلة له.",
   driver_account_unavailable: "السائق غير متاح أو لديه حساب بالفعل.",
+  invalid_attachments: "تحقق من الملفات المرفقة وصيغها.",
+  attachment_count_exceeded: "اختر 4 ملفات كحد أقصى.",
+  attachment_size_exceeded: "حجم الملف الواحد لا يتجاوز 5 MB وإجمالي الملفات لا يتجاوز 8 MB.",
+  attachment_type_invalid: "ارفع ملفات PDF أو JPG أو PNG فقط.",
+  attachment_access_denied: "لا تملك صلاحية تنزيل هذا المرفق.",
+  request_too_large: "حجم الطلب أكبر من الحد المسموح. قلّل حجم المرفقات.",
+  invalid_request_body: "تعذر قراءة بيانات الطلب.",
   clearance_unavailable: "البيان غير متاح أو سبق استخدامه في رحلة.",
   invalid_manual_clearance_input: "تحقق من جميع حقول بيانات الفسح.",
   invalid_trip_input: "تحقق من بيانات الرحلة والوثيقة المدخلة.",
@@ -762,6 +785,46 @@ async function apiRequest(path, options = {}) {
     throw error;
   }
   return payload;
+}
+
+async function encodeSelectedAttachments(input) {
+  const files = Array.from(input.files || []);
+  if (files.length > 4) throw new Error(translateText("اختر 4 ملفات كحد أقصى."));
+
+  let totalSize = 0;
+  const allowedTypes = new Map([
+    [".pdf", "application/pdf"],
+    [".jpg", "image/jpeg"],
+    [".jpeg", "image/jpeg"],
+    [".png", "image/png"]
+  ]);
+  const attachments = [];
+  for (const file of files) {
+    if (file.size > 5 * 1024 * 1024) throw new Error(translateText("حجم الملف الواحد لا يتجاوز 5 MB."));
+    totalSize += file.size;
+    if (totalSize > 8 * 1024 * 1024) throw new Error(translateText("إجمالي المرفقات لا يتجاوز 8 MB."));
+
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    const expectedType = allowedTypes.get(extension);
+    if (!expectedType || (file.type && file.type !== expectedType)) {
+      throw new Error(translateText("ارفع ملفات PDF أو JPG أو PNG فقط."));
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    attachments.push({ name: file.name, type: expectedType, data: btoa(binary) });
+  }
+  return attachments;
+}
+
+function renderAttachmentLinks(attachments, label = "المرفقات المحفوظة") {
+  if (!Array.isArray(attachments) || !attachments.length) return "";
+  return `<div class="attachment-list"><strong>${translateText(label)}</strong>${attachments.map(file =>
+    `<a href="/api/attachments/${encodeURIComponent(file.id)}" download>${translateText("تنزيل")} ${escapeHtml(file.name)} (${Math.ceil(file.size / 1024)} KB)</a>`
+  ).join("")}</div>`;
 }
 
 async function refreshServerState() {
@@ -1070,6 +1133,7 @@ async function renderFasahResults(query) {
         <div class="detail-item"><small>الميناء</small><strong>${escapeHtml(item.port)}</strong></div>
         <div class="detail-item"><small>تاريخ الفسح</small><strong>${formatDate(item.clearedAt)}</strong></div>
       </div>
+      ${renderAttachmentLinks(item.attachments, "مرفقات الفسح")}
       <div class="result-card-actions">${alreadyIssued
         ? `<span class="status-pill status-neutral">تم إصدار وثيقة لهذا البيان</span>`
         : `<button class="button button-primary" data-action="issue-clearance" data-id="${escapeHtml(item.id)}" ${item.status !== "CLEARED" ? "disabled" : ""}>إنشاء طلب رحلة <span>←</span></button>`}
@@ -1264,7 +1328,7 @@ function renderArchive(query = "") {
     return `<article class="archive-card">
       <div><h3>${escapeHtml(documentLabel(doc))}</h3><p>تاريخ الإصدار: ${doc.status === "DRAFT" ? "لم يصدر بعد" : formatDate(doc.issuedAt)}</p></div>
       <div><span class="status-pill ${status.className}">${status.text}</span><p>${escapeHtml(doc.declarationNumber)}</p></div>
-      <div class="archive-meta">الحاوية: ${escapeHtml(doc.containerNumber)} · اللوحة: ${escapeHtml(truck?.plateNumber || "—")}<br>العميل: ${escapeHtml(doc.customerName)} · السائق: ${escapeHtml(driver?.name || "—")}</div>
+      <div class="archive-meta">الحاوية: ${escapeHtml(doc.containerNumber)} · اللوحة: ${escapeHtml(truck?.plateNumber || "—")}<br>العميل: ${escapeHtml(doc.customerName)} · السائق: ${escapeHtml(driver?.name || "—")}${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}</div>
       <div class="archive-actions"><button class="button button-secondary" data-action="pdf" data-id="${escapeHtml(doc.id)}">عرض / PDF</button>${doc.returnedAt ? "" : `<label class="eir-field">رقم إيصال EIR (اختياري)<input type="text" data-return-eir autocomplete="off"></label>`}<button class="button button-light" data-action="return" data-id="${escapeHtml(doc.id)}" ${doc.returnedAt ? "disabled" : ""}>تسجيل الإعادة</button></div>
     </article>`;
   }).join("");
@@ -1478,6 +1542,8 @@ function renderDriverDashboard() {
         <div><span>موعد إعادة الحاوية</span><strong>${formatDate(doc.returnDueAt)}</strong></div>
         <div><span>تاريخ الرحلة</span><strong>${formatDate(doc.issuedAt)}</strong></div>
       </div>
+      ${renderAttachmentLinks(doc.clearanceAttachments, "مرفقات الفسح")}
+      ${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}
       <div class="driver-trip-actions"><span class="form-note">راجع تفاصيل الرحلة قبل القبول.</span><button class="button button-primary" type="button" data-action="accept-trip" data-id="${escapeHtml(doc.id)}">قبول الطلب وبدء الرحلة</button></div>
     </article>`;
   }).join("") : `<div class="driver-empty-state"><strong>لا توجد طلبات جديدة حالياً.</strong><p>ستظهر هنا الرحلات التي يعيّنها لك مدير النظام.</p></div>`;
@@ -1501,6 +1567,8 @@ function renderDriverDashboard() {
         <div><span>وجهة العميل</span><strong>${escapeHtml(doc.destination)}</strong></div>
         <div><span>موعد إعادة الحاوية</span><strong>${formatDate(doc.returnDueAt)}</strong></div>
       </div>
+      ${renderAttachmentLinks(doc.clearanceAttachments, "مرفقات الفسح")}
+      ${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}
       <div class="driver-timeline-wrap"><div class="driver-timeline">${timeline}</div></div>
       <div class="driver-trip-actions">
         <button class="button button-light" type="button" data-action="pdf" data-id="${escapeHtml(doc.id)}">عرض / PDF</button>
@@ -1572,6 +1640,7 @@ async function issueDocument(event) {
     return showToast("أدخل رقم الوثيقة وتاريخها معاً أو اتركهما فارغين.", true);
   }
   try {
+    const attachments = await encodeSelectedAttachments($("#transport-attachments"));
     await apiRequest("/api/trips", {
       method: "POST",
       body: {
@@ -1582,7 +1651,8 @@ async function issueDocument(event) {
         destination,
         returnDueAt: $("#issue-return-date").value || "",
         manualDocumentNumber,
-        manualDocumentDate
+        manualDocumentDate,
+        attachments
       }
     });
     $("#issue-form").reset();
@@ -1731,9 +1801,10 @@ async function handleClearanceSubmit(event) {
     return showToast("أدخل تاريخ الفسح للحاوية المفسوحة.", true);
   }
   try {
+    const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
     const clearance = await apiRequest("/api/clearances/manual", {
       method: "POST",
-      body: values
+      body: { ...values, attachments }
     });
     form.reset();
     $("#clearance-form-wrap").classList.add("hidden");

@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { attachmentMetadata, parseManualAttachments } from "../utils/attachments.js";
 import {
   hasCompleteManualDocumentReference,
   manualClearanceSchema,
@@ -22,14 +23,20 @@ const tripStages = [
 ];
 const truckStatuses = ["AVAILABLE", "ASSIGNED", "ON_TRIP", "MAINTENANCE", "INACTIVE"];
 const ACTIVE_TRIP_FILTER = { emptyReturnedAt: null };
+const attachmentMetadataSelect = {
+  id: true,
+  originalName: true,
+  contentType: true,
+  size: true
+};
 const tripInclude = {
   truck: true,
   driver: true,
   customer: true,
   port: true,
   container: true,
-  customsClearance: true,
-  transportDocument: true,
+  customsClearance: { include: { attachments: { select: attachmentMetadataSelect } } },
+  transportDocument: { include: { attachments: { select: attachmentMetadataSelect } } },
   stageUpdates: { orderBy: { completedAt: "asc" } }
 };
 
@@ -49,7 +56,8 @@ function mapClearance(clearance) {
     port: clearance.port.name,
     source: clearance.source,
     status: clearance.status,
-    clearedAt: clearance.clearedAt?.toISOString().slice(0, 10) || null
+    clearedAt: clearance.clearedAt?.toISOString().slice(0, 10) || null,
+    attachments: (clearance.attachments || []).map(attachmentMetadata)
   };
 }
 
@@ -82,7 +90,9 @@ function mapTrip(trip) {
     acceptedAt: trip.driverAcceptedAt?.toISOString() || "",
     tripStageIndex: completed ? tripStages.length - 1 : trip.driverAcceptedAt ? Math.max(0, stageIndex) : -1,
     returnedAt: trip.emptyReturnedAt?.toISOString().slice(0, 10) || "",
-    eir: trip.eirReceiptNumber || ""
+    eir: trip.eirReceiptNumber || "",
+    clearanceAttachments: (trip.customsClearance.attachments || []).map(attachmentMetadata),
+    attachments: (trip.transportDocument?.attachments || []).map(attachmentMetadata)
   };
 }
 
@@ -139,7 +149,7 @@ async function getAppState(req) {
     }),
     prisma.customsClearance.findMany({
       where: isDriver ? { trip: { driverId } } : {},
-      include: { container: true, port: true },
+      include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } },
       orderBy: { createdAt: "desc" }
     }),
     prisma.trip.findMany({
@@ -186,7 +196,7 @@ router.get("/fasah/lookup", requireAdmin, async (req, res) => {
         { container: { containerNumber: { contains: query.data, mode: "insensitive" } } }
       ]
     },
-    include: { container: true, port: true },
+    include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } },
     orderBy: { createdAt: "desc" },
     take: 50
   });
@@ -194,6 +204,7 @@ router.get("/fasah/lookup", requireAdmin, async (req, res) => {
 });
 
 router.post("/clearances/manual", requireAdmin, async (req, res) => {
+  const attachments = parseManualAttachments(req.body?.attachments);
   const parsed = manualClearanceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_manual_clearance_input" });
 
@@ -231,14 +242,18 @@ router.post("/clearances/manual", requireAdmin, async (req, res) => {
         vesselName: parsed.data.vesselName || null,
         shippingSealNumber: parsed.data.sealNumber || null,
         containerId: container.id,
-        portId: port.id
+        portId: port.id,
+        ...(attachments.length ? {
+          attachments: { create: attachments }
+        } : {})
       },
-      include: { container: true, port: true }
+      include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } }
     });
     await writeAudit(tx, req, "clearance.manually_created", "CustomsClearance", created.id, {
       declarationNumber: created.declarationNumber,
       containerNumber: container.containerNumber,
-      status: created.status
+      status: created.status,
+      attachmentCount: attachments.length
     });
     return created;
   });
@@ -510,6 +525,7 @@ router.patch("/accounts/:id", requireAdmin, async (req, res) => {
 });
 
 router.post("/trips", requireAdmin, async (req, res) => {
+  const attachments = parseManualAttachments(req.body?.attachments);
   const schema = z.object({
     clearanceId: z.string().min(1),
     truckId: z.string().min(1),
@@ -569,7 +585,10 @@ router.post("/trips", requireAdmin, async (req, res) => {
             source: parsed.data.manualDocumentNumber ? "MANUAL_ENTRY" : "INTERNAL_DRAFT",
             issuedAt: parsed.data.manualDocumentDate
               ? new Date(`${parsed.data.manualDocumentDate}T00:00:00.000Z`)
-              : null
+              : null,
+            ...(attachments.length ? {
+              attachments: { create: attachments }
+            } : {})
           }
         }
       },
@@ -579,10 +598,44 @@ router.post("/trips", requireAdmin, async (req, res) => {
       where: { id: truck.id },
       data: { status: "ASSIGNED", assignedDriverId: driver.id }
     });
-    await writeAudit(tx, req, "trip.created", "Trip", created.id, { clearanceId: clearance.id });
+    await writeAudit(tx, req, "trip.created", "Trip", created.id, {
+      clearanceId: clearance.id,
+      attachmentCount: attachments.length
+    });
     return created;
   }, { isolationLevel: "Serializable" });
   res.status(201).json(mapTrip(trip));
+});
+
+router.get("/attachments/:id", async (req, res) => {
+  const attachment = await prisma.operationAttachment.findUnique({
+    where: { id: req.params.id },
+    include: {
+      clearance: { select: { trip: { select: { driverId: true } } } },
+      transportDocument: { select: { trip: { select: { driverId: true } } } }
+    }
+  });
+  if (!attachment) return res.status(404).json({ error: "record_not_found" });
+
+  const allowedDriverIds = [
+    attachment.clearance?.trip?.driverId,
+    attachment.transportDocument?.trip?.driverId
+  ];
+  if (req.user.role !== "ADMIN" && !allowedDriverIds.includes(req.user.driverId)) {
+    return res.status(403).json({ error: "attachment_access_denied" });
+  }
+
+  const fallbackName = attachment.contentType === "application/pdf" ? "document.pdf"
+    : attachment.contentType === "image/png" ? "document.png" : "document.jpg";
+  const filename = attachment.originalName || fallbackName;
+  const encodedFilename = encodeURIComponent(filename)
+    .replace(/[!'()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  res.setHeader("Content-Type", attachment.contentType);
+  res.setHeader("Content-Length", attachment.size);
+  res.setHeader("Content-Disposition", `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedFilename}`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(Buffer.from(attachment.data));
 });
 
 router.post("/trips/:id/accept", async (req, res) => {

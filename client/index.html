@@ -132,6 +132,7 @@
               <label class="field">مدينة الميناء<input name="portCity" required maxlength="120"></label>
               <label class="field">حالة الفسح<select name="status" required><option value="CLEARED">مفسوح</option><option value="PENDING">قيد الإجراء</option><option value="ON_HOLD">معلق</option><option value="REJECTED">مرفوض</option></select></label>
               <label class="field">تاريخ الفسح<input name="clearedAt" type="date"></label>
+              <label class="field full-field">مستندات الفسح (PDF أو JPG أو PNG)<input id="clearance-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small></label>
               <button class="button button-primary" type="submit">حفظ بيانات الفسح</button>
               <p class="search-hint full-field">هذه بيانات مدخلة يدوياً ولا يتم التحقق منها لدى منصة فسح.</p>
             </form>
@@ -161,6 +162,7 @@
               <div class="form-grid">
                 <label class="field">رقم وثيقة النقل<input id="issue-manual-document-number" maxlength="80"></label>
                 <label class="field">تاريخ الوثيقة<input id="issue-manual-document-date" type="date"></label>
+                <label class="field full-field">مستندات وثيقة النقل (PDF أو JPG أو PNG)<input id="transport-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small></label>
               </div>
               <div class="form-actions"><span class="form-note">الرقم المدخل يُحفظ كمرجع يدوي ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.</span><button class="button button-primary" type="submit"><span>＋</span> حفظ الرحلة</button></div>
             </form>

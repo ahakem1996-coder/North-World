@@ -19,7 +19,7 @@ Express serves the browser interface from `client/` and the API from the same or
 
 ## Manual data entry and integrations
 
-Administrators can enter clearance details and search the saved records. A trip can store an externally issued transport-document number and date as a manual reference. These entries are not verified by Fasah or other government platforms, and an official PDF is not attached or issued by this application.
+Administrators can enter clearance details and attach supporting clearance and transport-document files (PDF, JPG, or PNG; up to four files and 8 MB total per entry). Attachments are stored in PostgreSQL and can be downloaded from the clearance results and document archive. Uploaded files and manually entered document references are not verified by Fasah or other government platforms; the application does not issue government documents.
 
 The app is not yet deployed or connected to government APIs. The database starts empty; enter the company's real truck, driver, port, and account records before operations.
 
