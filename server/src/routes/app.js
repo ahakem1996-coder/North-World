@@ -23,6 +23,34 @@ const tripStages = [
 ];
 const truckStatuses = ["AVAILABLE", "ASSIGNED", "ON_TRIP", "MAINTENANCE", "INACTIVE"];
 const ACTIVE_TRIP_FILTER = { emptyReturnedAt: null };
+const MAX_IMPORT_FILE_BYTES = 3 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 500;
+const DRIVER_IMPORT_COLUMNS = [
+  { key: "name", required: true, headers: ["اسم السائق", "name"] },
+  { key: "nationalId", required: true, headers: ["رقم الهوية / الإقامة", "رقم الهوية", "national id", "nationalId"] },
+  { key: "phone", required: true, headers: ["رقم الجوال", "الجوال", "phone", "mobile"] },
+  { key: "passportNumber", required: true, headers: ["رقم جواز السفر", "جواز السفر", "passport number", "passportNumber"] }
+];
+const TRUCK_IMPORT_COLUMNS = [
+  { key: "fleetNumber", required: true, headers: ["رقم الأسطول", "fleet number", "fleetNumber"] },
+  { key: "plateNumber", required: true, headers: ["رقم السيارة (حروف وأرقام)", "رقم السيارة", "رقم اللوحة", "plate number", "plateNumber"] },
+  { key: "serialNumber", required: true, headers: ["الرقم التسلسلي", "رقم الهيكل", "serial number", "serialNumber"] },
+  { key: "model", required: true, headers: ["الموديل", "model"] },
+  { key: "driverNationalId", required: false, headers: ["رقم هوية السائق (اختياري)", "رقم هوية السائق", "driver national id", "driverNationalId"] }
+];
+const driverImportRowSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  nationalId: z.string().trim().min(1).max(32),
+  phone: z.string().trim().min(1).max(32),
+  passportNumber: z.string().trim().min(1).max(64)
+});
+const truckImportRowSchema = z.object({
+  fleetNumber: z.string().trim().min(1).max(32),
+  plateNumber: z.string().trim().min(1).max(32),
+  serialNumber: z.string().trim().min(1).max(64),
+  model: z.string().trim().min(1).max(80),
+  driverNationalId: z.string().trim().max(32).optional().default("")
+});
 const attachmentMetadataSelect = {
   id: true,
   originalName: true,
@@ -40,6 +68,7 @@ const tripInclude = {
   stageUpdates: { orderBy: { completedAt: "asc" } }
 };
 const tripExpenseInclude = {
+  attachments: { select: attachmentMetadataSelect },
   trip: {
     include: {
       truck: { select: { plateNumber: true } },
@@ -53,6 +82,100 @@ const tripExpenseInclude = {
 
 function normalizedUsername(value) {
   return value.trim().toLocaleLowerCase("en");
+}
+
+function importFailure(code, statusCode = 400, details) {
+  return Object.assign(new Error(code), { publicCode: code, statusCode, details });
+}
+
+function normalizedImportHeader(value) {
+  return String(value || "").trim().toLocaleLowerCase("en").replace(/[\s_/\-()]+/g, "");
+}
+
+function importCellText(cell) {
+  const value = cell.value;
+  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (value && typeof value === "object" && Array.isArray(value.richText)) {
+    return value.richText.map(part => part.text || "").join("").trim();
+  }
+  return "";
+}
+
+function readImportRows(worksheet, columns, rowSchema) {
+  if (worksheet.rowCount > MAX_IMPORT_ROWS + 1) {
+    throw importFailure("import_row_limit_exceeded", 413);
+  }
+  const headerRow = worksheet.getRow(1);
+  const headers = new Map();
+  headerRow.eachCell((cell, columnNumber) => {
+    headers.set(normalizedImportHeader(importCellText(cell)), columnNumber);
+  });
+  const columnNumbers = new Map();
+  const missingHeaders = [];
+  for (const column of columns) {
+    const columnNumber = column.headers
+      .map(normalizedImportHeader)
+      .map(header => headers.get(header))
+      .find(Boolean);
+    if (columnNumber) columnNumbers.set(column.key, columnNumber);
+    else if (column.required) missingHeaders.push(column.key);
+  }
+  if (missingHeaders.length) throw importFailure("invalid_import_headers", 400);
+
+  const rows = [];
+  const errors = [];
+  for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+    const data = {};
+    for (const column of columns) {
+      const columnNumber = columnNumbers.get(column.key);
+      data[column.key] = columnNumber ? importCellText(worksheet.getRow(rowNumber).getCell(columnNumber)) : "";
+    }
+    if (Object.values(data).every(value => !value)) continue;
+    const parsed = rowSchema.safeParse(data);
+    if (!parsed.success) errors.push({ row: rowNumber, code: "invalid_row" });
+    else rows.push({ row: rowNumber, data: parsed.data });
+  }
+  if (errors.length) throw importFailure("import_validation_failed", 422, errors);
+  if (!rows.length) throw importFailure("import_empty", 400);
+  return rows;
+}
+
+async function loadImportWorkbook(body, columns, rowSchema) {
+  const input = z.object({
+    fileName: z.string().trim().min(1).max(255).regex(/\.xlsx$/i),
+    data: z.string().min(1).regex(/^[A-Za-z0-9+/]+={0,2}$/)
+  }).safeParse(body);
+  if (!input.success || input.data.data.length % 4 !== 0) throw importFailure("invalid_excel_file", 400);
+  if (input.data.data.length > Math.ceil(MAX_IMPORT_FILE_BYTES / 3) * 4 + 4) {
+    throw importFailure("import_file_too_large", 413);
+  }
+  const buffer = Buffer.from(input.data.data, "base64");
+  if (!buffer.length || buffer.length > MAX_IMPORT_FILE_BYTES) throw importFailure("import_file_too_large", 413);
+
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer);
+  } catch {
+    throw importFailure("invalid_excel_file", 400);
+  }
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw importFailure("invalid_excel_file", 400);
+  return readImportRows(worksheet, columns, rowSchema);
+}
+
+function findDuplicateImportRows(rows, keys) {
+  const seen = new Map();
+  const errors = [];
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = String(row.data[key] || "").trim().toLocaleLowerCase("en");
+      if (!value) continue;
+      const identity = `${key}:${value}`;
+      if (seen.has(identity)) errors.push({ row: row.row, code: "duplicate_in_file" });
+      else seen.set(identity, row.row);
+    }
+  }
+  return errors;
 }
 
 function mapClearance(clearance) {
@@ -119,6 +242,7 @@ function mapTripExpense(expense) {
     type: expense.type,
     notes: expense.notes || "",
     createdAt: expense.createdAt.toISOString(),
+    attachments: (expense.attachments || []).map(attachmentMetadata),
     driverId: expense.trip.driverId,
     driverName: expense.trip.driver.name,
     nationalId: expense.trip.driver.nationalId,
@@ -240,6 +364,127 @@ router.get("/fasah/lookup", requireAdmin, async (req, res) => {
     take: 50
   });
   res.json({ clearances: clearances.map(mapClearance) });
+});
+
+router.get("/import-templates/:type", requireAdmin, async (req, res) => {
+  const type = req.params.type;
+  const columns = type === "drivers" ? DRIVER_IMPORT_COLUMNS
+    : type === "trucks" ? TRUCK_IMPORT_COLUMNS
+      : null;
+  if (!columns) return res.status(404).json({ error: "record_not_found" });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "North World Transport Management";
+  const worksheet = workbook.addWorksheet(type === "drivers" ? "السائقون" : "السيارات");
+  worksheet.views = [{ rightToLeft: true }];
+  worksheet.columns = columns.map(column => ({
+    header: column.headers[0],
+    key: column.key,
+    width: column.key === "name" ? 28 : 24,
+    style: { numFmt: "@" }
+  }));
+  worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF173B5E" } };
+  const instructions = workbook.addWorksheet("تعليمات");
+  instructions.views = [{ rightToLeft: true }];
+  instructions.getColumn(1).width = 95;
+  instructions.addRows([
+    ["استخدم الورقة الأولى لإدخال البيانات، واترك صف العناوين كما هو."],
+    ["ارفع ملف بصيغة .xlsx، والحد الأقصى 500 صف و3 MB."],
+    ...(type === "drivers"
+      ? [["جميع حقول السائق مطلوبة. يجب أن يكون رقم الهوية ورقم جواز السفر غير مستخدمين مسبقاً."]]
+      : [["رقم هوية السائق اختياري؛ عند إدخاله يجب أن يطابق هوية سائق نشط مسجل بالنظام."],
+        ["يجب أن تكون أرقام الأسطول واللوحات والأرقام التسلسلية فريدة."]])
+  ]);
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="north-world-${type}-template.xlsx"`);
+  res.setHeader("Content-Length", buffer.length);
+  res.send(buffer);
+});
+
+router.post("/drivers/import", requireAdmin, async (req, res) => {
+  const rows = await loadImportWorkbook(req.body, DRIVER_IMPORT_COLUMNS, driverImportRowSchema);
+  const fileDuplicates = findDuplicateImportRows(rows, ["nationalId", "passportNumber"]);
+  if (fileDuplicates.length) throw importFailure("import_conflict", 409, fileDuplicates);
+
+  await prisma.$transaction(async tx => {
+    const existing = await tx.driver.findMany({
+      where: {
+        OR: [
+          { nationalId: { in: rows.map(row => row.data.nationalId) } },
+          { passportNumber: { in: rows.map(row => row.data.passportNumber) } }
+        ]
+      },
+      select: { nationalId: true, passportNumber: true }
+    });
+    const existingNationalIds = new Set(existing.map(driver => driver.nationalId));
+    const existingPassports = new Set(existing.map(driver => driver.passportNumber).filter(Boolean));
+    const conflicts = rows
+      .filter(row => existingNationalIds.has(row.data.nationalId) || existingPassports.has(row.data.passportNumber))
+      .map(row => ({ row: row.row, code: "already_exists" }));
+    if (conflicts.length) throw importFailure("import_conflict", 409, conflicts);
+
+    for (const row of rows) {
+      const driver = await tx.driver.create({ data: row.data });
+      await writeAudit(tx, req, "driver.imported", "Driver", driver.id, { row: row.row });
+    }
+  });
+  res.status(201).json({ imported: rows.length });
+});
+
+router.post("/trucks/import", requireAdmin, async (req, res) => {
+  const rows = await loadImportWorkbook(req.body, TRUCK_IMPORT_COLUMNS, truckImportRowSchema);
+  const fileDuplicates = findDuplicateImportRows(rows, ["fleetNumber", "plateNumber", "serialNumber"]);
+  if (fileDuplicates.length) throw importFailure("import_conflict", 409, fileDuplicates);
+
+  await prisma.$transaction(async tx => {
+    const existingTrucks = await tx.truck.findMany({
+      where: {
+        OR: [
+          { fleetNumber: { in: rows.map(row => row.data.fleetNumber) } },
+          { plateNumber: { in: rows.map(row => row.data.plateNumber) } },
+          { serialNumber: { in: rows.map(row => row.data.serialNumber) } }
+        ]
+      },
+      select: { fleetNumber: true, plateNumber: true, serialNumber: true }
+    });
+    const existingFleetNumbers = new Set(existingTrucks.map(truck => truck.fleetNumber));
+    const existingPlates = new Set(existingTrucks.map(truck => truck.plateNumber));
+    const existingSerialNumbers = new Set(existingTrucks.map(truck => truck.serialNumber));
+    const conflicts = rows
+      .filter(row => existingFleetNumbers.has(row.data.fleetNumber) ||
+        existingPlates.has(row.data.plateNumber) ||
+        existingSerialNumbers.has(row.data.serialNumber))
+      .map(row => ({ row: row.row, code: "already_exists" }));
+
+    const driverNationalIds = [...new Set(rows.map(row => row.data.driverNationalId).filter(Boolean))];
+    const drivers = driverNationalIds.length ? await tx.driver.findMany({
+      where: { nationalId: { in: driverNationalIds }, isActive: true, deletedAt: null },
+      select: { id: true, nationalId: true }
+    }) : [];
+    const driverIds = new Map(drivers.map(driver => [driver.nationalId, driver.id]));
+    for (const row of rows) {
+      if (row.data.driverNationalId && !driverIds.has(row.data.driverNationalId)) {
+        conflicts.push({ row: row.row, code: "driver_not_found" });
+      }
+    }
+    if (conflicts.length) throw importFailure("import_conflict", 409, conflicts);
+
+    for (const row of rows) {
+      const truck = await tx.truck.create({
+        data: {
+          fleetNumber: row.data.fleetNumber,
+          plateNumber: row.data.plateNumber,
+          serialNumber: row.data.serialNumber,
+          model: row.data.model,
+          assignedDriverId: driverIds.get(row.data.driverNationalId) || null
+        }
+      });
+      await writeAudit(tx, req, "truck.imported", "Truck", truck.id, { row: row.row });
+    }
+  });
+  res.status(201).json({ imported: rows.length });
 });
 
 router.post("/clearances/manual", requireAdmin, async (req, res) => {
@@ -712,6 +957,7 @@ router.post("/trip-expenses", async (req, res) => {
   if (req.user.role !== "DRIVER" || !req.user.driverId) {
     return res.status(403).json({ error: "driver_only" });
   }
+  const attachments = parseManualAttachments(req.body?.attachments);
   const schema = z.object({
     tripId: z.string().trim().min(1),
     amount: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).refine(value => Number(value) > 0),
@@ -742,7 +988,8 @@ router.post("/trip-expenses", async (req, res) => {
         tripId: trip.id,
         amount: parsed.data.amount,
         type: parsed.data.type,
-        notes: parsed.data.notes || null
+        notes: parsed.data.notes || null,
+        ...(attachments.length ? { attachments: { create: attachments } } : {})
       },
       include: tripExpenseInclude
     });
@@ -761,14 +1008,16 @@ router.get("/attachments/:id", async (req, res) => {
     where: { id: req.params.id },
     include: {
       clearance: { select: { trip: { select: { driverId: true } } } },
-      transportDocument: { select: { trip: { select: { driverId: true } } } }
+      transportDocument: { select: { trip: { select: { driverId: true } } } },
+      tripExpense: { select: { trip: { select: { driverId: true } } } }
     }
   });
   if (!attachment) return res.status(404).json({ error: "record_not_found" });
 
   const allowedDriverIds = [
     attachment.clearance?.trip?.driverId,
-    attachment.transportDocument?.trip?.driverId
+    attachment.transportDocument?.trip?.driverId,
+    attachment.tripExpense?.trip?.driverId
   ];
   if (req.user.role !== "ADMIN" && !allowedDriverIds.includes(req.user.driverId)) {
     return res.status(403).json({ error: "attachment_access_denied" });

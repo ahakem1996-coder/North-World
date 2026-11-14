@@ -31,6 +31,10 @@ const TRANSLATIONS = Object.freeze({
   "الرحلة / الحاوية": "Trip / Container",
   "التكلفة": "Cost",
   "نوع التكلفة": "Expense Type",
+  "المستندات": "Documents",
+  "مرفقات التكلفة": "Expense Attachments",
+  "مستندات إثبات التكلفة (PDF أو JPG أو PNG)": "Expense supporting documents (PDF, JPG, or PNG)",
+  "حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).": "Up to 4 files, 8 MB total (up to 5 MB per file).",
   "تاريخ التسجيل": "Recorded At",
   "سجل تكاليف الرحلات المرتبطة بحسابك.": "Trip expenses linked to your account.",
   "إضافة تكلفة رحلة": "Add Trip Expense",
@@ -50,6 +54,30 @@ const TRANSLATIONS = Object.freeze({
   "تحقق من مبلغ ونوع المصروف والرحلة.": "Check the expense amount, type, and trip.",
   "لا يمكن إضافة تكلفة لهذه الرحلة.": "An expense cannot be added to this trip.",
   "هذه الخدمة متاحة لحسابات السائقين فقط.": "This feature is only available to driver accounts.",
+  "رفع سيارات من Excel": "Import Trucks from Excel",
+  "تنزيل نموذج السيارات": "Download Truck Template",
+  "رفع سائقين من Excel": "Import Drivers from Excel",
+  "تنزيل نموذج السائقين": "Download Driver Template",
+  "تحميل نموذج Excel": "Download Excel Template",
+  "اختر ملف Excel بصيغة .xlsx.": "Choose an Excel .xlsx file.",
+  "حجم ملف Excel يجب ألا يتجاوز 3 MB.": "The Excel file must not exceed 3 MB.",
+  "جارٍ استيراد البيانات...": "Importing data...",
+  "تم استيراد ": "Imported ",
+  " سائقاً بنجاح.": " driver(s) successfully.",
+  " سيارة بنجاح.": " truck(s) successfully.",
+  "صف ": "Row ",
+  "بيانات ناقصة أو غير صحيحة.": "Missing or invalid data.",
+  "تكرار بيانات داخل الملف.": "Duplicate data in the file.",
+  "مسجل مسبقاً في النظام.": "Already registered in the system.",
+  "رقم هوية السائق غير موجود أو غير نشط.": "The driver's national ID was not found or is inactive.",
+  "تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx.": "Could not read the Excel file. Upload a valid .xlsx file.",
+  "الحد الأقصى 500 صف في ملف Excel.": "The Excel file limit is 500 rows.",
+  "الملف لا يحتوي على بيانات للاستيراد.": "The file contains no data to import.",
+  "استخدم نموذج Excel الصحيح مع إبقاء صف العناوين كما هو.": "Use the correct Excel template and keep the header row unchanged.",
+  "لم يتم استيراد البيانات بسبب وجود صفوف غير صحيحة:": "No data was imported because some rows are invalid:",
+  "لم يتم استيراد البيانات بسبب وجود تعارض في الصفوف:": "No data was imported because some rows conflict:",
+  "بيانات الصف غير صالحة.": "The row data is invalid.",
+  "تم تنزيل نموذج Excel.": "Excel template downloaded.",
   "متابعة الأسطول": "Fleet Tracking",
   "تابع الرحلات بعد قبول السائق وتحديث مراحلها. لا تعرض هذه الشاشة موقع GPS مباشراً.": "Track trips after the driver accepts them and records stage updates. This screen does not show live GPS location.",
   "تحديث الآن": "Refresh now",
@@ -833,6 +861,13 @@ const API_ERRORS = {
   invalid_trip_expense: "تحقق من مبلغ ونوع المصروف والرحلة.",
   expense_trip_unavailable: "لا يمكن إضافة تكلفة لهذه الرحلة.",
   driver_only: "هذه الخدمة متاحة لحسابات السائقين فقط.",
+  invalid_excel_file: "تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx.",
+  import_file_too_large: "حجم ملف Excel يجب ألا يتجاوز 3 MB.",
+  import_row_limit_exceeded: "الحد الأقصى 500 صف في ملف Excel.",
+  import_empty: "الملف لا يحتوي على بيانات للاستيراد.",
+  invalid_import_headers: "استخدم نموذج Excel الصحيح مع إبقاء صف العناوين كما هو.",
+  import_validation_failed: "لم يتم استيراد البيانات بسبب وجود صفوف غير صحيحة:",
+  import_conflict: "لم يتم استيراد البيانات بسبب وجود تعارض في الصفوف:",
   truck_details_conflict: "بيانات الشاحنة مسجلة مسبقاً.",
   driver_details_conflict: "بيانات السائق مسجلة مسبقاً.",
   truck_has_active_trip: "لا يمكن تعديل الشاحنة أو حذفها لارتباطها برحلة نشطة.",
@@ -859,6 +894,12 @@ const API_ERRORS = {
   integration_not_configured: "الربط الرسمي غير مهيأ حالياً. لم تُستخدم بيانات محاكاة.",
   origin_not_allowed: "تم رفض الطلب بسبب مصدر غير موثوق."
 };
+const IMPORT_ROW_ERRORS = {
+  invalid_row: "بيانات ناقصة أو غير صحيحة.",
+  duplicate_in_file: "تكرار بيانات داخل الملف.",
+  already_exists: "مسجل مسبقاً في النظام.",
+  driver_not_found: "رقم هوية السائق غير موجود أو غير نشط."
+};
 
 async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -874,7 +915,14 @@ async function apiRequest(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = API_ERRORS[payload.error] || payload.message || `تعذر إكمال الطلب (${response.status}).`;
+    const baseMessage = API_ERRORS[payload.error] || payload.message || `تعذر إكمال الطلب (${response.status}).`;
+    const details = Array.isArray(payload.details) ? payload.details.slice(0, 8).map(detail => {
+      if (typeof detail === "string") return detail;
+      const reason = IMPORT_ROW_ERRORS[detail.code] || "بيانات الصف غير صالحة.";
+      return detail.row ? `صف ${detail.row}: ${reason}` : reason;
+    }).join("، ") : "";
+    const moreDetails = Array.isArray(payload.details) && payload.details.length > 8 ? " ..." : "";
+    const message = [baseMessage, details, moreDetails].filter(Boolean).join(" ");
     const error = new Error(message);
     error.status = response.status;
     error.code = payload.error;
@@ -1486,8 +1534,76 @@ function renderTripExpenses() {
       <td>${formatCurrency(expense.amount)}</td>
       <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
       <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${renderAttachmentLinks(expense.attachments, "مرفقات التكلفة") || "—"}</td>
       <td>${formatDateTime(expense.createdAt)}</td>
-    </tr>`).join("") : `<tr><td colspan="8" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="9" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const separator = result.indexOf(",");
+      if (separator < 0) return reject(new Error("تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx."));
+      resolve(result.slice(separator + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error("تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function importSpreadsheet(type, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const importButton = $(`#import-${type}-button`);
+  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    input.value = "";
+    return showToast("اختر ملف Excel بصيغة .xlsx.", true);
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    input.value = "";
+    return showToast("حجم ملف Excel يجب ألا يتجاوز 3 MB.", true);
+  }
+  importButton.disabled = true;
+  try {
+    showToast("جارٍ استيراد البيانات...");
+    const data = await readFileAsBase64(file);
+    const result = await apiRequest(`/api/${type}/import`, {
+      method: "POST",
+      body: { fileName: file.name, data }
+    });
+    await refreshServerState();
+    showToast(type === "drivers"
+      ? `تم استيراد ${result.imported} سائقاً بنجاح.`
+      : `تم استيراد ${result.imported} سيارة بنجاح.`);
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    input.value = "";
+    importButton.disabled = false;
+  }
+}
+
+async function downloadImportTemplate(type) {
+  try {
+    const response = await fetch(`/api/import-templates/${type}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(API_ERRORS[payload.error] || `تعذر تنزيل النموذج (${response.status}).`);
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `north-world-${type}-template.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("تم تنزيل نموذج Excel.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
 }
 
 function renderArchive(query = "") {
@@ -1813,8 +1929,9 @@ function renderDriverExpenses(driver) {
       <td>${formatCurrency(expense.amount)}</td>
       <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
       <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${renderAttachmentLinks(expense.attachments, "مرفقات التكلفة") || "—"}</td>
       <td>${formatDateTime(expense.createdAt)}</td>
-    </tr>`).join("") : `<tr><td colspan="5" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="6" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
 }
 
 function renderDriverDashboard() {
@@ -2169,13 +2286,15 @@ async function handleTripExpenseSubmit(event) {
   if (!trip) return showToast("لا يمكن إضافة تكلفة لهذه الرحلة.", true);
 
   try {
+    const attachments = await encodeSelectedAttachments($("#trip-expense-attachments"));
     await apiRequest("/api/trip-expenses", {
       method: "POST",
       body: {
         tripId: trip.tripId,
         amount: values.amount.trim(),
         type: values.type,
-        notes: values.notes.trim()
+        notes: values.notes.trim(),
+        attachments
       }
     });
     form.reset();
@@ -2217,6 +2336,8 @@ function init() {
     if (nav) return switchView(nav.dataset.view);
     const go = event.target.closest("[data-go]");
     if (go) return switchView(go.dataset.go);
+    const importTemplate = event.target.closest("[data-import-template]");
+    if (importTemplate) return downloadImportTemplate(importTemplate.dataset.importTemplate);
     const action = event.target.closest("[data-action]");
     if (!action) return;
     if (action.dataset.action === "pdf") printDocument(action.dataset.id);
@@ -2275,6 +2396,10 @@ function init() {
     if (editingDriverId) cancelDriverEdit();
     else $("#driver-form-wrap").classList.toggle("hidden");
   });
+  $("#import-trucks-button").addEventListener("click", () => $("#import-trucks-file").click());
+  $("#import-drivers-button").addEventListener("click", () => $("#import-drivers-file").click());
+  $("#import-trucks-file").addEventListener("change", event => importSpreadsheet("trucks", event.currentTarget));
+  $("#import-drivers-file").addEventListener("change", event => importSpreadsheet("drivers", event.currentTarget));
   $("#cancel-truck-edit").addEventListener("click", cancelTruckEdit);
   $("#cancel-driver-edit").addEventListener("click", cancelDriverEdit);
   $("#truck-rows").addEventListener("change", async event => {

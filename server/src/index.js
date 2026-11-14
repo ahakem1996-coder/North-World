@@ -26,6 +26,9 @@ app.use(helmet({
 app.use(requireSameOrigin);
 app.post("/api/clearances/manual", requireAuth, requireAdmin, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
 app.post("/api/trips", requireAuth, requireAdmin, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
+app.post("/api/trip-expenses", requireAuth, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
+app.post("/api/drivers/import", requireAuth, requireAdmin, express.json({ limit: "5mb" }));
+app.post("/api/trucks/import", requireAuth, requireAdmin, express.json({ limit: "5mb" }));
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/api/health/live", (req, res) => res.json({ status: "ok" }));

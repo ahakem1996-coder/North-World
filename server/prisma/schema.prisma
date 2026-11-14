@@ -279,6 +279,7 @@ model TripExpense {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   trip      Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  attachments OperationAttachment[]
 
   @@index([tripId, createdAt])
 }
@@ -319,12 +320,15 @@ model OperationAttachment {
   data                Bytes
   clearanceId         String?
   transportDocumentId String?
+  tripExpenseId       String?
   createdAt           DateTime           @default(now())
   clearance           CustomsClearance?  @relation(fields: [clearanceId], references: [id], onDelete: Cascade)
   transportDocument   TransportDocument? @relation(fields: [transportDocumentId], references: [id], onDelete: Cascade)
+  tripExpense         TripExpense?       @relation(fields: [tripExpenseId], references: [id], onDelete: Cascade)
 
   @@index([clearanceId, createdAt])
   @@index([transportDocumentId, createdAt])
+  @@index([tripExpenseId, createdAt])
 }
 
 model IntegrationHealth {

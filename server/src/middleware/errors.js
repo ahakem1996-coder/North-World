@@ -12,7 +12,10 @@ export function errorHandler(error, req, res, next) {
     return res.status(400).json({ error: "invalid_request_body" });
   }
   if (error?.publicCode) {
-    return res.status(error.statusCode || 400).json({ error: error.publicCode });
+    return res.status(error.statusCode || 400).json({
+      error: error.publicCode,
+      ...(error.details ? { details: error.details } : {})
+    });
   }
   if (error?.code === "P2002") {
     return res.status(409).json({ error: "record_already_exists" });
