@@ -9,6 +9,7 @@ import {
   manualClearanceSchema,
   manualDocumentReferenceFields
 } from "../utils/manual-input.js";
+import { resolveSoftDeletedRecord } from "../utils/soft-delete.js";
 import { extractFasahAppointmentPdf } from "../utils/fasah-appointment.js";
 import { hashPassword } from "../utils/password.js";
 
@@ -569,6 +570,7 @@ router.post("/drivers/import", requireAdmin, async (req, res) => {
   if (fileDuplicates.length) throw importFailure("import_conflict", 409, fileDuplicates);
 
   await prisma.$transaction(async tx => {
+    const identityFields = ["nationalId", "passportNumber"];
     const existing = await tx.driver.findMany({
       where: {
         OR: [
@@ -576,26 +578,61 @@ router.post("/drivers/import", requireAdmin, async (req, res) => {
           { passportNumber: { in: rows.map(row => row.data.passportNumber) } }
         ]
       },
-      select: { nationalId: true, passportNumber: true }
+      select: { id: true, nationalId: true, passportNumber: true, deletedAt: true }
     });
-    const existingNationalIds = new Set(existing.map(driver => driver.nationalId));
-    const existingPassports = new Set(existing.map(driver => driver.passportNumber).filter(Boolean));
-    const conflicts = rows
-      .filter(row => existingNationalIds.has(row.data.nationalId) || existingPassports.has(row.data.passportNumber))
-      .map(row => ({ row: row.row, code: "already_exists" }));
+    const resolutions = rows.map(row => ({
+      row,
+      resolution: resolveSoftDeletedRecord(existing, row.data, identityFields)
+    }));
+    const restoredIds = new Set();
+    const conflicts = [];
+    for (const { row, resolution } of resolutions) {
+      if (resolution.kind === "conflict" ||
+          resolution.kind === "restore" && restoredIds.has(resolution.record.id)) {
+        conflicts.push({ row: row.row, code: "already_exists" });
+      } else if (resolution.kind === "restore") {
+        restoredIds.add(resolution.record.id);
+      }
+    }
     if (conflicts.length) throw importFailure("import_conflict", 409, conflicts);
 
-    for (const row of rows) {
-      const driver = await tx.driver.create({ data: row.data });
-      await writeAudit(tx, req, "driver.imported", "Driver", driver.id, { row: row.row });
+    const rowsToCreate = [];
+    for (const { row, resolution } of resolutions) {
+      if (resolution.kind === "restore") {
+        const driver = await tx.driver.update({
+          where: { id: resolution.record.id },
+          data: { ...row.data, isActive: true, deletedAt: null }
+        });
+        await writeAudit(tx, req, "driver.restored", "Driver", driver.id, { row: row.row });
+      } else {
+        rowsToCreate.push(row);
+      }
     }
-  });
+    if (rowsToCreate.length) {
+      await tx.driver.createMany({ data: rowsToCreate.map(row => row.data) });
+      const createdDrivers = await tx.driver.findMany({
+        where: { nationalId: { in: rowsToCreate.map(row => row.data.nationalId) } },
+        select: { id: true, nationalId: true }
+      });
+      const driverIds = new Map(createdDrivers.map(driver => [driver.nationalId, driver.id]));
+      await tx.auditLog.createMany({
+        data: rowsToCreate.map(row => ({
+          actorId: req.user.id,
+          action: "driver.imported",
+          entityType: "Driver",
+          entityId: driverIds.get(row.data.nationalId),
+          metadata: { row: row.row }
+        }))
+      });
+    }
+  }, { timeout: 60_000 });
   res.status(201).json({ imported: rows.length });
 });
 
 router.post("/trucks/import", requireAdmin, async (req, res) => {
   const rows = await loadImportWorkbook(req.body, TRUCK_IMPORT_COLUMNS, truckImportRowSchema);
-  const fileDuplicates = findDuplicateImportRows(rows, ["fleetNumber", "plateNumber", "serialNumber"]);
+  const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
+  const fileDuplicates = findDuplicateImportRows(rows, identityFields);
   if (fileDuplicates.length) throw importFailure("import_conflict", 409, fileDuplicates);
 
   await prisma.$transaction(async tx => {
@@ -607,16 +644,22 @@ router.post("/trucks/import", requireAdmin, async (req, res) => {
           { serialNumber: { in: rows.map(row => row.data.serialNumber) } }
         ]
       },
-      select: { fleetNumber: true, plateNumber: true, serialNumber: true }
+      select: { id: true, fleetNumber: true, plateNumber: true, serialNumber: true, deletedAt: true }
     });
-    const existingFleetNumbers = new Set(existingTrucks.map(truck => truck.fleetNumber));
-    const existingPlates = new Set(existingTrucks.map(truck => truck.plateNumber));
-    const existingSerialNumbers = new Set(existingTrucks.map(truck => truck.serialNumber));
-    const conflicts = rows
-      .filter(row => existingFleetNumbers.has(row.data.fleetNumber) ||
-        existingPlates.has(row.data.plateNumber) ||
-        existingSerialNumbers.has(row.data.serialNumber))
-      .map(row => ({ row: row.row, code: "already_exists" }));
+    const resolutions = rows.map(row => ({
+      row,
+      resolution: resolveSoftDeletedRecord(existingTrucks, row.data, identityFields)
+    }));
+    const restoredIds = new Set();
+    const conflicts = [];
+    for (const { row, resolution } of resolutions) {
+      if (resolution.kind === "conflict" ||
+          resolution.kind === "restore" && restoredIds.has(resolution.record.id)) {
+        conflicts.push({ row: row.row, code: "already_exists" });
+      } else if (resolution.kind === "restore") {
+        restoredIds.add(resolution.record.id);
+      }
+    }
 
     const driverNationalIds = [...new Set(rows.map(row => row.data.driverNationalId).filter(Boolean))];
     const drivers = driverNationalIds.length ? await tx.driver.findMany({
@@ -631,30 +674,53 @@ router.post("/trucks/import", requireAdmin, async (req, res) => {
     }
     if (conflicts.length) throw importFailure("import_conflict", 409, conflicts);
 
-    await tx.truck.createMany({
-      data: rows.map(({ data }) => ({
-        fleetNumber: data.fleetNumber,
-        plateNumber: data.plateNumber,
-        serialNumber: data.serialNumber,
-        model: data.model,
-        assignedDriverId: driverIds.get(data.driverNationalId) || null
-      }))
-    });
-    const createdTrucks = await tx.truck.findMany({
-      where: { fleetNumber: { in: rows.map(row => row.data.fleetNumber) } },
-      select: { id: true, fleetNumber: true }
-    });
-    const truckIds = new Map(createdTrucks.map(truck => [truck.fleetNumber, truck.id]));
-    await tx.auditLog.createMany({
-      data: rows.map(row => ({
-        actorId: req.user.id,
-        action: "truck.imported",
-        entityType: "Truck",
-        entityId: truckIds.get(row.data.fleetNumber),
-        metadata: { row: row.row }
-      }))
-    });
-  });
+    const rowsToCreate = [];
+    for (const { row, resolution } of resolutions) {
+      const assignedDriverId = driverIds.get(row.data.driverNationalId) || null;
+      if (resolution.kind === "restore") {
+        const truck = await tx.truck.update({
+          where: { id: resolution.record.id },
+          data: {
+            fleetNumber: row.data.fleetNumber,
+            plateNumber: row.data.plateNumber,
+            serialNumber: row.data.serialNumber,
+            model: row.data.model,
+            status: "AVAILABLE",
+            deletedAt: null,
+            assignedDriverId
+          }
+        });
+        await writeAudit(tx, req, "truck.restored", "Truck", truck.id, { row: row.row });
+      } else {
+        rowsToCreate.push({ row, assignedDriverId });
+      }
+    }
+    if (rowsToCreate.length) {
+      await tx.truck.createMany({
+        data: rowsToCreate.map(({ row, assignedDriverId }) => ({
+          fleetNumber: row.data.fleetNumber,
+          plateNumber: row.data.plateNumber,
+          serialNumber: row.data.serialNumber,
+          model: row.data.model,
+          assignedDriverId
+        }))
+      });
+      const createdTrucks = await tx.truck.findMany({
+        where: { fleetNumber: { in: rowsToCreate.map(({ row }) => row.data.fleetNumber) } },
+        select: { id: true, fleetNumber: true }
+      });
+      const truckIds = new Map(createdTrucks.map(truck => [truck.fleetNumber, truck.id]));
+      await tx.auditLog.createMany({
+        data: rowsToCreate.map(({ row }) => ({
+          actorId: req.user.id,
+          action: "truck.imported",
+          entityType: "Truck",
+          entityId: truckIds.get(row.data.fleetNumber),
+          metadata: { row: row.row }
+        }))
+      });
+    }
+  }, { timeout: 60_000 });
   res.status(201).json({ imported: rows.length });
 });
 
@@ -732,11 +798,44 @@ router.post("/trucks", requireAdmin, async (req, res) => {
   if (!driver) return res.status(400).json({ error: "active_driver_required" });
 
   const truck = await prisma.$transaction(async tx => {
-    const created = await tx.truck.create({
-      data: { ...truckData, assignedDriverId: driver.id }
+    const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
+    const matches = await tx.truck.findMany({
+      where: {
+        OR: identityFields.map(field => ({ [field]: truckData[field] }))
+      },
+      select: {
+        id: true,
+        fleetNumber: true,
+        plateNumber: true,
+        serialNumber: true,
+        deletedAt: true
+      }
     });
-    await writeAudit(tx, req, "truck.created", "Truck", created.id);
-    return created;
+    const resolution = resolveSoftDeletedRecord(matches, truckData, identityFields);
+    if (resolution.kind === "conflict") {
+      throw Object.assign(new Error("truck_details_conflict"), { statusCode: 409, publicCode: "truck_details_conflict" });
+    }
+
+    let saved;
+    if (resolution.kind === "restore") {
+      const activeTrip = await tx.trip.findFirst({
+        where: { truckId: resolution.record.id, ...ACTIVE_TRIP_FILTER },
+        select: { id: true }
+      });
+      if (activeTrip) {
+        throw Object.assign(new Error("truck_has_active_trip"), { statusCode: 409, publicCode: "truck_has_active_trip" });
+      }
+      saved = await tx.truck.update({
+        where: { id: resolution.record.id },
+        data: { ...truckData, status: "AVAILABLE", deletedAt: null, assignedDriverId: driver.id }
+      });
+    } else {
+      saved = await tx.truck.create({
+        data: { ...truckData, assignedDriverId: driver.id }
+      });
+    }
+    await writeAudit(tx, req, resolution.kind === "restore" ? "truck.restored" : "truck.created", "Truck", saved.id);
+    return saved;
   });
   res.status(201).json(stateTruck(truck));
 });
@@ -864,9 +963,36 @@ router.post("/drivers", requireAdmin, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_driver_input" });
 
   const driver = await prisma.$transaction(async tx => {
-    const created = await tx.driver.create({ data: parsed.data });
-    await writeAudit(tx, req, "driver.created", "Driver", created.id);
-    return created;
+    const identityFields = ["nationalId", "passportNumber"];
+    const matches = await tx.driver.findMany({
+      where: {
+        OR: identityFields.map(field => ({ [field]: parsed.data[field] }))
+      },
+      select: { id: true, nationalId: true, passportNumber: true, deletedAt: true }
+    });
+    const resolution = resolveSoftDeletedRecord(matches, parsed.data, identityFields);
+    if (resolution.kind === "conflict") {
+      throw Object.assign(new Error("driver_details_conflict"), { statusCode: 409, publicCode: "driver_details_conflict" });
+    }
+
+    let saved;
+    if (resolution.kind === "restore") {
+      const activeTrip = await tx.trip.findFirst({
+        where: { driverId: resolution.record.id, ...ACTIVE_TRIP_FILTER },
+        select: { id: true }
+      });
+      if (activeTrip) {
+        throw Object.assign(new Error("driver_has_active_trip"), { statusCode: 409, publicCode: "driver_has_active_trip" });
+      }
+      saved = await tx.driver.update({
+        where: { id: resolution.record.id },
+        data: { ...parsed.data, isActive: true, deletedAt: null }
+      });
+    } else {
+      saved = await tx.driver.create({ data: parsed.data });
+    }
+    await writeAudit(tx, req, resolution.kind === "restore" ? "driver.restored" : "driver.created", "Driver", saved.id);
+    return saved;
   });
   res.status(201).json(stateDriver(driver));
 });

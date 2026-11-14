@@ -2389,7 +2389,7 @@ async function handleTruckSubmit(event) {
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
   if (!driverById(values.driverId)?.isActive) return showToast("اختر سائقاً نشطاً للسيارة.", true);
-  if (state.trucks.some(item => item.id !== editingTruckId && (
+  if (state.trucks.some(item => !item.deletedAt && item.id !== editingTruckId && (
     item.fleetNumber.toLowerCase() === values.fleetNumber.trim().toLowerCase() ||
     item.plateNumber.toLowerCase() === values.plateNumber.trim().toLowerCase() ||
     item.serialNumber.toLowerCase() === values.serialNumber.trim().toLowerCase()
@@ -2514,7 +2514,7 @@ async function handleDriverSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
-  if (state.drivers.some(item => item.id !== editingDriverId && (
+  if (state.drivers.some(item => !item.deletedAt && item.id !== editingDriverId && (
     item.nationalId.toLowerCase() === values.nationalId.trim().toLowerCase() ||
     (item.passportNumber || "").toLowerCase() === values.passportNumber.trim().toLowerCase()
   ))) {

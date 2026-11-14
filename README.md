@@ -23,7 +23,7 @@ Administrators can enter clearance details and attach supporting clearance and t
 
 Administrators can upload a text-based Fasah appointment confirmation PDF (up to 5 MB and 5 pages). The server extracts booking, vehicle, driver, entry, and exit fields locally; the administrator reviews and confirms them before the appointment and source PDF are saved. Scanned PDFs are not OCR-processed. Appointment tickets are stored separately and do not establish that customs clearance has been granted.
 
-Administrators can download Excel templates and import up to 500 driver or truck records per `.xlsx` file (maximum 3 MB). Imports are validated as a whole; duplicate or invalid rows prevent the batch from being saved. Truck templates can optionally associate a truck with an active driver using the driver's national/residency ID.
+Administrators can download Excel templates and import up to 500 driver or truck records per `.xlsx` file (maximum 3 MB). Imports are validated as a whole; duplicate or invalid rows prevent the batch from being saved. A row matching a soft-deleted driver or truck restores that record rather than creating a duplicate. Truck templates can optionally associate a truck with an active driver using the driver's national/residency ID.
 
 Drivers can record fuel or maintenance expenses against accepted trips and attach up to four PDF, JPG, or PNG receipts (8 MB total). Administrators can review the consolidated expense list, including the truck, driver, residency number, amount, type, notes, and downloadable attachments. Drivers can access attachments for their own expenses only.
 
