@@ -25,8 +25,12 @@ export const manualClearanceSchema = z.object({
   portName: z.string().trim().min(1).max(120),
   portCity: z.string().trim().min(1).max(120),
   status: z.enum(["PENDING", "CLEARED", "ON_HOLD", "REJECTED"]),
-  clearedAt: z.string().date().optional().or(z.literal(""))
+  clearedAt: z.string().date().optional().or(z.literal("")),
+  clearanceConfirmed: z.boolean().optional().default(false)
 }).refine(value => value.status !== "CLEARED" || Boolean(value.clearedAt), {
   path: ["clearedAt"],
   message: "cleared_date_required"
+}).refine(value => value.status !== "CLEARED" || value.clearanceConfirmed, {
+  path: ["clearanceConfirmed"],
+  message: "clearance_confirmation_required"
 });

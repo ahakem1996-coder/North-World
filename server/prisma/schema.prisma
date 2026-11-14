@@ -243,7 +243,11 @@ model Trip {
   freeTimeEndsAt      DateTime?
   driverAcceptedAt    DateTime?
   currentStage        TripStage?
-  truckId             String
+  truckId             String?
+  truckFleetNumber    String
+  truckPlateNumber    String
+  truckSerialNumber   String
+  truckModel          String
   driverId            String
   customerId          String
   portId              String
@@ -251,7 +255,7 @@ model Trip {
   customsClearanceId  String             @unique
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
-  truck               Truck              @relation(fields: [truckId], references: [id], onDelete: Restrict)
+  truck               Truck?             @relation(fields: [truckId], references: [id], onDelete: SetNull)
   driver              Driver             @relation(fields: [driverId], references: [id], onDelete: Restrict)
   customer            Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   port                Port               @relation(fields: [portId], references: [id], onDelete: Restrict)

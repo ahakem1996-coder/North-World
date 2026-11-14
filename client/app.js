@@ -93,7 +93,6 @@ const TRANSLATIONS = Object.freeze({
   "اختر النوع": "Select type",
   "اختر حالة الفسح": "Select clearance status",
   "استخدام بيانات الموعد للرحلة": "Use Appointment for Trip",
-  "تذكرة الموعد لا تثبت الفسح. أكمل المقاس والنوع وحالة الفسح وتاريخها بعد التحقق.": "The appointment ticket does not prove customs clearance. Enter the size, type, clearance status, and date after verification.",
   "رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.": "The ticket phone does not match exactly one active driver with an account.",
   "تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.": "The driver matched, but no available truck is assigned to them.",
   "الحاوية مرتبطة ببيان جمركي مختلف عن بيانات الموعد.": "This container is linked to a different customs declaration than the appointment.",
@@ -102,6 +101,9 @@ const TRANSLATIONS = Object.freeze({
   "لا تتضمن التذكرة رقم بيان وحاوية صالحين.": "The ticket does not contain a valid declaration and container number.",
   "تم تسجيل بيانات الحاوية من التذكرة والانتقال إلى إصدار الرحلة.": "Container details were recorded from the ticket and the trip form is ready.",
   "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
+  "تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.": "Declaration, container, and port were filled from the ticket. Size defaults to 40 feet; container type and clearance date are not provided by the appointment ticket, so enter them manually.",
+  "أؤكد أن حالة الفسح وتاريخه مطابقان لإثبات فسح رسمي، وليس لتذكرة موعد فقط.": "I confirm the clearance status and date match official clearance proof, not just an appointment ticket.",
+  "أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.": "Confirm the clearance status and date using official documentation before saving.",
   "تم إصدار وثيقة لهذا البيان.": "A document has already been issued for this declaration.",
   "أدخل تاريخ الفسح للحاوية المفسوحة.": "Enter the clearance date for a cleared container.",
   "لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.": "Appointment details cannot be used to create a trip until clearance is confirmed.",
@@ -711,6 +713,9 @@ const TRANSLATIONS = Object.freeze({
   "بيانات السائق مسجلة مسبقاً.": "Driver details are already registered.",
   "تمت إضافة السائق.": "Driver added.",
   "تم تحديث بيانات الشاحنة.": "Truck details updated.",
+  "تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.": "The truck was permanently deleted from the database; its previous documents and reports remain available.",
+  " نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.": " permanently from the database? Its trips and previous documents will remain in the archive.",
+  " سيارة نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.": " truck(s) permanently from the database? Their trips and previous documents will remain in the archive.",
   "تم تحديث بيانات السائق.": "Driver details updated.",
   "يتطلب النظام اتصالاً بخادم الشركة. لا تُحفظ بيانات العمل على هذا الجهاز.": "A connection to the company server is required. Business data is not stored on this device.",
   "بيانات مركزية آمنة": "Secure central data",
@@ -938,6 +943,14 @@ function showToast(message, isError = false) {
 }
 
 function truckById(id) { return state.trucks.find(item => item.id === id); }
+function truckForTrip(doc) {
+  return truckById(doc.truckId) || (doc.truckPlateNumber || doc.truckFleetNumber ? {
+    plateNumber: doc.truckPlateNumber,
+    fleetNumber: doc.truckFleetNumber,
+    serialNumber: doc.truckSerialNumber,
+    model: doc.truckModel
+  } : null);
+}
 function driverById(id) { return state.drivers.find(item => item.id === id); }
 function clearanceById(id) { return state.clearances.find(item => item.id === id); }
 
@@ -985,6 +998,7 @@ const API_ERRORS = {
   invalid_request_body: "تعذر قراءة بيانات الطلب.",
   clearance_unavailable: "البيان غير متاح أو سبق استخدامه في رحلة.",
   invalid_manual_clearance_input: "تحقق من جميع حقول بيانات الفسح.",
+  clearance_confirmation_required: "أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.",
   invalid_trip_input: "تحقق من بيانات الرحلة والوثيقة المدخلة.",
   container_details_conflict: "بيانات الحاوية المسجلة لا تطابق المقاس أو النوع المدخل.",
   truck_unavailable: "الشاحنة غير متاحة.",
@@ -1427,6 +1441,14 @@ function appointmentPortName(portName) {
   return "";
 }
 
+function updateClearanceConfirmation() {
+  const isCleared = $("#clearance-status").value === "CLEARED";
+  const checkbox = $("#clearance-confirmed");
+  checkbox.required = isCleared;
+  $("#clearance-confirmation-wrap").classList.toggle("hidden", !isCleared);
+  if (!isCleared) checkbox.checked = false;
+}
+
 function normalizePhoneNumber(value) {
   const digits = String(value || "").replace(/\D/g, "");
   if (digits.startsWith("00966")) return `0${digits.slice(5)}`;
@@ -1499,14 +1521,18 @@ function prepareTripFromFasahAppointment(id) {
   form.reset();
   form.elements.namedItem("declarationNumber").value = declarationNumber;
   form.elements.namedItem("containerNumber").value = containerNumber;
-  form.elements.namedItem("size").value = "";
-  form.elements.namedItem("type").value = "";
-  form.elements.namedItem("status").value = "";
+  form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
+  form.elements.namedItem("type").value = appointment.containerType || "";
+  form.elements.namedItem("status").value = "CLEARED";
+  form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
+  $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
+  $("#clearance-confirmed").checked = false;
   const portSelect = $("#clearance-port");
   portSelect.value = appointmentPortName(appointment.portName);
   portSelect.dispatchEvent(new Event("change"));
+  updateClearanceConfirmation();
   $("#clearance-form-wrap").classList.remove("hidden");
-  showToast("تذكرة الموعد لا تثبت الفسح. أكمل المقاس والنوع وحالة الفسح وتاريخها بعد التحقق.");
+  showToast("تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.");
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -1723,13 +1749,13 @@ function updateBulkControls(type, visibleIds) {
 async function deleteTruck(id) {
   const truck = truckById(id);
   if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber}؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
+  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.`)) return;
   try {
     await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
     if (editingTruckId === id) cancelTruckEdit();
     selectedTruckIds.delete(id);
     await refreshServerState();
-    showToast("تم حذف السيارة من قائمة الأسطول مع الاحتفاظ بوثائقها السابقة.");
+    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1806,7 +1832,7 @@ function cancelDriverEdit() {
 async function deleteSelectedTrucks() {
   const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
   if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة؟ ستبقى الوثائق السابقة في الأرشيف.`)) return;
+  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.`)) return;
   try {
     const result = await apiRequest("/api/trucks/bulk-delete", {
       method: "POST",
@@ -1815,7 +1841,7 @@ async function deleteSelectedTrucks() {
     if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
     result.deleted.forEach(id => selectedTruckIds.delete(id));
     await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
+    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1944,7 +1970,7 @@ async function downloadImportTemplate(type) {
 function renderArchive(query = "") {
   const term = String(query || "").trim().toLowerCase();
   const matches = [...state.docs].filter(doc => {
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     return [doc.documentNumber, doc.declarationNumber, doc.containerNumber, truck?.plateNumber, doc.customerName]
       .some(value => String(value || "").toLowerCase().includes(term));
   }).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
@@ -1955,7 +1981,7 @@ function renderArchive(query = "") {
     return;
   }
   container.innerHTML = matches.map(doc => {
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     const driver = driverById(doc.driverId);
     const status = documentStatus(doc);
     return `<article class="archive-card">
@@ -1981,7 +2007,7 @@ function renderTripTracking() {
     if (statusFilter === "active" && doc.returnedAt) return false;
     if (statusFilter === "completed" && !doc.returnedAt) return false;
     const driver = driverById(doc.driverId);
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     const searchable = [
       doc.documentNumber, doc.declarationNumber, doc.containerNumber,
       doc.customerName, doc.port, doc.destination, driver?.name,
@@ -2002,7 +2028,7 @@ function renderTripTracking() {
 
   container.innerHTML = trips.map(doc => {
     const driver = driverById(doc.driverId);
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     const stageHistory = new Map((doc.stageHistory || []).map(update => [update.stage, update.completedAt]));
     const currentStageIndex = Number.isInteger(doc.tripStageIndex)
       ? Math.max(0, Math.min(doc.tripStageIndex, TRIP_STAGES.length - 1))
@@ -2089,7 +2115,7 @@ function renderReports() {
   $("#report-count").textContent = `${docs.length} عملية`;
   $("#report-empty").classList.toggle("hidden", docs.length > 0);
   $("#report-rows").innerHTML = docs.map(doc => {
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     const driver = driverById(doc.driverId);
     const returned = returnLabel(doc);
     const status = documentStatus(doc);
@@ -2283,7 +2309,7 @@ function renderDriverDashboard() {
   $("#driver-stat-complete").textContent = trips.length - activeDocs.length;
   $("#driver-request-count").textContent = requests.length;
   $("#driver-request-list").innerHTML = requests.length ? requests.map(doc => {
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     return `<article class="driver-request-card">
       <div class="driver-request-head"><div><h2>${escapeHtml(documentLabel(doc))}</h2><p>طلب جديد من الإدارة · بانتظار قبولك</p></div><span class="status-pill status-pending">بانتظار القبول</span></div>
       <div class="driver-request-details">
@@ -2301,7 +2327,7 @@ function renderDriverDashboard() {
   }).join("") : `<div class="driver-empty-state"><strong>لا توجد طلبات جديدة حالياً.</strong><p>ستظهر هنا الرحلات التي يعيّنها لك مدير النظام.</p></div>`;
 
   $("#driver-trip-list").innerHTML = trips.length ? trips.map(doc => {
-    const truck = truckById(doc.truckId);
+    const truck = truckForTrip(doc);
     const currentStage = Math.max(0, Math.min(doc.tripStageIndex, TRIP_STAGES.length - 1));
     const timeline = TRIP_STAGES.map((stage, index) => {
       const stateClass = index < currentStage ? "done" : index === currentStage ? "current" : "";
@@ -2437,7 +2463,7 @@ async function recordReturn(id, eirValue = "") {
 function printDocument(id) {
   const doc = state.docs.find(item => item.id === id);
   if (!doc) return showToast("تعذر العثور على الوثيقة.", true);
-  const truck = truckById(doc.truckId);
+  const truck = truckForTrip(doc);
   const driver = driverById(doc.driverId);
   const isDraft = doc.status === "DRAFT";
   if (!isDraft) {
@@ -2567,6 +2593,9 @@ async function handleClearanceSubmit(event) {
   if (pendingFasahAppointmentId && values.status !== "CLEARED") {
     return showToast("لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.", true);
   }
+  if (values.status === "CLEARED" && !$("#clearance-confirmed").checked) {
+    return showToast("أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.", true);
+  }
   if (values.status === "CLEARED" && !values.clearedAt) {
     return showToast("أدخل تاريخ الفسح للحاوية المفسوحة.", true);
   }
@@ -2577,10 +2606,12 @@ async function handleClearanceSubmit(event) {
     const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
     const clearance = await apiRequest("/api/clearances/manual", {
       method: "POST",
-      body: { ...values, attachments }
+      body: { ...values, clearanceConfirmed: $("#clearance-confirmed").checked, attachments }
     });
     pendingFasahAppointmentId = null;
     form.reset();
+    $("#clearance-declaration-field").classList.remove("hidden");
+    updateClearanceConfirmation();
     $("#clearance-form-wrap").classList.add("hidden");
     await refreshServerState();
     $("#fasah-query").value = clearance.declarationNumber;
@@ -2811,6 +2842,7 @@ function init() {
   $("#clearance-port").addEventListener("change", event => {
     $("#clearance-port-city").value = PORT_CITIES[event.target.value] || "";
   });
+  $("#clearance-status").addEventListener("change", updateClearanceConfirmation);
   $("#issue-clearance").addEventListener("change", renderSelectedClearance);
   $("#issue-truck").addEventListener("change", () => syncIssueTruckDriver("truck"));
   $("#issue-driver").addEventListener("change", () => syncIssueTruckDriver("driver"));
@@ -2829,7 +2861,9 @@ function init() {
   });
   $("#toggle-clearance-form").addEventListener("click", () => {
     pendingFasahAppointmentId = null;
+    $("#clearance-declaration-field").classList.remove("hidden");
     $("#clearance-form-wrap").classList.toggle("hidden");
+    updateClearanceConfirmation();
   });
   $("#toggle-driver-form").addEventListener("click", () => {
     if (editingDriverId) cancelDriverEdit();

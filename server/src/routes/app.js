@@ -73,7 +73,6 @@ const tripExpenseInclude = {
   attachments: { select: attachmentMetadataSelect },
   trip: {
     include: {
-      truck: { select: { plateNumber: true } },
       driver: { select: { name: true, nationalId: true } },
       container: { select: { containerNumber: true } },
       customsClearance: { select: { declarationNumber: true } },
@@ -254,7 +253,11 @@ function mapTrip(trip) {
     vesselName: trip.customsClearance.vesselName,
     port: trip.port.name,
     customerName: trip.customer.name,
-    truckId: trip.truckId,
+    truckId: trip.truckId || "",
+    truckFleetNumber: trip.truckFleetNumber,
+    truckPlateNumber: trip.truckPlateNumber,
+    truckSerialNumber: trip.truckSerialNumber,
+    truckModel: trip.truckModel,
     driverId: trip.driverId,
     destination: trip.deliveryDestination,
     returnDueAt: trip.emptyReturnDueAt?.toISOString().slice(0, 10) || "",
@@ -285,7 +288,7 @@ function mapTripExpense(expense) {
     driverId: expense.trip.driverId,
     driverName: expense.trip.driver.name,
     nationalId: expense.trip.driver.nationalId,
-    plateNumber: expense.trip.truck.plateNumber,
+    plateNumber: expense.trip.truck?.plateNumber || expense.trip.truckPlateNumber,
     containerNumber: expense.trip.container.containerNumber,
     declarationNumber: expense.trip.customsClearance.declarationNumber,
     documentNumber: expense.trip.transportDocument?.documentNumber || null
@@ -727,7 +730,12 @@ router.post("/trucks/import", requireAdmin, async (req, res) => {
 router.post("/clearances/manual", requireAdmin, async (req, res) => {
   const attachments = parseManualAttachments(req.body?.attachments);
   const parsed = manualClearanceSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "invalid_manual_clearance_input" });
+  if (!parsed.success) {
+    const confirmationRequired = parsed.error.issues.some(issue => issue.path[0] === "clearanceConfirmed");
+    return res.status(400).json({
+      error: confirmationRequired ? "clearance_confirmation_required" : "invalid_manual_clearance_input"
+    });
+  }
 
   const clearance = await prisma.$transaction(async tx => {
     const port = await tx.port.upsert({
@@ -911,23 +919,21 @@ router.patch("/trucks/:id", requireAdmin, async (req, res) => {
   res.json(stateTruck(truck));
 });
 
-async function softDeleteTruck(req, truckId, tx = prisma) {
+async function deleteTruckRecord(truckId, tx) {
   const truck = await tx.truck.findUniqueOrThrow({ where: { id: truckId } });
   const activeTrip = await tx.trip.findFirst({ where: { truckId, ...ACTIVE_TRIP_FILTER }, select: { id: true } });
   if (activeTrip) throw Object.assign(new Error("truck_has_active_trip"), { statusCode: 409, publicCode: "truck_has_active_trip" });
-  return tx.truck.update({
-    where: { id: truck.id },
-    data: { deletedAt: new Date(), status: "INACTIVE", assignedDriverId: null }
-  });
+  await tx.truck.delete({ where: { id: truck.id } });
+  return truck;
 }
 
 router.delete("/trucks/:id", requireAdmin, async (req, res) => {
   const truck = await prisma.$transaction(async tx => {
-    const deleted = await softDeleteTruck(req, req.params.id, tx);
+    const deleted = await deleteTruckRecord(req.params.id, tx);
     await writeAudit(tx, req, "truck.deleted", "Truck", deleted.id);
     return deleted;
-  });
-  res.json(stateTruck(truck));
+  }, { isolationLevel: "Serializable" });
+  res.json({ id: truck.id });
 });
 
 router.post("/trucks/bulk-delete", requireAdmin, async (req, res) => {
@@ -937,19 +943,19 @@ router.post("/trucks/bulk-delete", requireAdmin, async (req, res) => {
     const deleted = [];
     const blocked = [];
     for (const id of new Set(parsed.data.ids)) {
+      const truck = await tx.truck.findUnique({ where: { id } });
+      if (!truck) continue;
       const activeTrip = await tx.trip.findFirst({ where: { truckId: id, ...ACTIVE_TRIP_FILTER }, select: { id: true } });
       if (activeTrip) {
         blocked.push(id);
         continue;
       }
-      const truck = await tx.truck.findUnique({ where: { id } });
-      if (!truck || truck.deletedAt) continue;
-      const updated = await softDeleteTruck(req, id, tx);
-      deleted.push(updated.id);
-      await writeAudit(tx, req, "truck.deleted", "Truck", updated.id);
+      await tx.truck.delete({ where: { id } });
+      deleted.push(id);
+      await writeAudit(tx, req, "truck.deleted", "Truck", id);
     }
     return { deleted, blocked };
-  });
+  }, { isolationLevel: "Serializable" });
   res.json(result);
 });
 
@@ -1217,6 +1223,10 @@ router.post("/trips", requireAdmin, async (req, res) => {
         deliveryDestination: parsed.data.destination,
         emptyReturnDueAt: parsed.data.returnDueAt ? new Date(`${parsed.data.returnDueAt}T00:00:00.000Z`) : null,
         truckId: truck.id,
+        truckFleetNumber: truck.fleetNumber,
+        truckPlateNumber: truck.plateNumber,
+        truckSerialNumber: truck.serialNumber,
+        truckModel: truck.model,
         driverId: driver.id,
         customerId: customer.id,
         portId: clearance.portId,
@@ -1523,8 +1533,8 @@ router.get("/reports.xlsx", requireAdmin, async (req, res) => {
       documentStatus: trip.transportDocument?.source === "MANUAL_ENTRY"
         ? "مدخل يدوياً"
         : trip.transportDocument?.status || "DRAFT",
-      plateNumber: trip.truck.plateNumber,
-      fleetNumber: trip.truck.fleetNumber,
+      plateNumber: trip.truck?.plateNumber || trip.truckPlateNumber,
+      fleetNumber: trip.truck?.fleetNumber || trip.truckFleetNumber,
       containerNumber: trip.container.containerNumber,
       size: trip.container.size === "FT_20" ? "20 قدم" : "40 قدم",
       type: trip.container.type,

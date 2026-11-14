@@ -196,6 +196,8 @@ tbody tr:hover { background: #fbfcfe; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: #8db9dc; box-shadow: 0 0 0 3px #3588cb12; }
 .full-field { grid-column: 1 / -1; }
 .selected-clearance { grid-column: 1 / -1; padding: 10px 12px; border: 1px solid #dcefe7; border-radius: 8px; color: #4a7564; background: #f1faf6; font-size: 10px; line-height: 1.8; }
+.clearance-confirmation { display: flex; align-items: flex-start; gap: 9px; color: #8a6537; font-size: 10px; line-height: 1.7; }
+.clearance-confirmation input { width: 16px; height: 16px; margin: 1px 0 0; flex: 0 0 auto; accent-color: #1c8b72; }
 .form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #edf0f3; }
 .form-note { color: #9aa6b2; font-size: 9px; }
 .issue-aside { padding: 20px 18px; }
