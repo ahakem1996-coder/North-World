@@ -9,6 +9,7 @@ import {
   manualClearanceSchema,
   manualDocumentReferenceFields
 } from "../utils/manual-input.js";
+import { extractFasahAppointmentPdf } from "../utils/fasah-appointment.js";
 import { hashPassword } from "../utils/password.js";
 
 const router = Router();
@@ -195,6 +196,43 @@ function mapClearance(clearance) {
   };
 }
 
+function mapFasahAppointment(appointment) {
+  return {
+    id: appointment.id,
+    bookingReferenceNumber: appointment.bookingReferenceNumber,
+    operatorTicketNumber: appointment.operatorTicketNumber || "",
+    zoneGateName: appointment.zoneGateName || "",
+    portContractorId: appointment.portContractorId || "",
+    portContractorName: appointment.portContractorName || "",
+    portName: appointment.portName || "",
+    appointmentDate: appointment.appointmentDate?.toISOString().slice(0, 10) || "",
+    appointmentTime: appointment.appointmentTime || "",
+    vehiclePlateNumber: appointment.vehiclePlateNumber || "",
+    vehiclePlateType: appointment.vehiclePlateType || "",
+    vehicleColor: appointment.vehicleColor || "",
+    vehicleRefId: appointment.vehicleRefId || "",
+    vehicleSerialId: appointment.vehicleSerialId || "",
+    vehicleModel: appointment.vehicleModel || "",
+    driverName: appointment.driverName || "",
+    driverMobileNumber: appointment.driverMobileNumber || "",
+    driverLicenseNumber: appointment.driverLicenseNumber || "",
+    entryLocation: appointment.entryLocation || "",
+    entryBlNumber: appointment.entryBlNumber || "",
+    entryDeclarationNumber: appointment.entryDeclarationNumber || "",
+    entryContainerNumber: appointment.entryContainerNumber || "",
+    entryCargoType: appointment.entryCargoType || "",
+    entrySerialNumber: appointment.entrySerialNumber || "",
+    exitLocation: appointment.exitLocation || "",
+    exitBlNumber: appointment.exitBlNumber || "",
+    exitDeclarationNumber: appointment.exitDeclarationNumber || "",
+    exitContainerNumber: appointment.exitContainerNumber || "",
+    exitCargoType: appointment.exitCargoType || "",
+    exitSerialNumber: appointment.exitSerialNumber || "",
+    createdAt: appointment.createdAt.toISOString(),
+    attachments: (appointment.attachments || []).map(attachmentMetadata)
+  };
+}
+
 function mapTrip(trip) {
   const completed = Boolean(trip.emptyReturnedAt);
   const stageIndex = trip.currentStage ? tripStages.indexOf(trip.currentStage) : -1;
@@ -293,7 +331,7 @@ async function writeAudit(tx, req, action, entityType, entityId, metadata) {
 async function getAppState(req) {
   const isDriver = req.user.role === "DRIVER";
   const driverId = isDriver ? req.user.driverId : undefined;
-  const [trucks, drivers, clearances, trips, accounts, ports, tripExpenses] = await Promise.all([
+  const [trucks, drivers, clearances, trips, accounts, ports, tripExpenses, fasahAppointments] = await Promise.all([
     prisma.truck.findMany({
       where: isDriver
         ? { trips: { some: { driverId } } }
@@ -320,6 +358,7 @@ async function getAppState(req) {
         id: true,
         username: true,
         role: true,
+        isActive: true,
         driverId: true,
         createdAt: true,
         deletedAt: true
@@ -331,6 +370,11 @@ async function getAppState(req) {
       where: isDriver ? { trip: { is: { driverId } } } : {},
       include: tripExpenseInclude,
       orderBy: { createdAt: "desc" }
+    }),
+    isDriver ? Promise.resolve([]) : prisma.fasahAppointment.findMany({
+      include: { attachments: { select: attachmentMetadataSelect } },
+      orderBy: { createdAt: "desc" },
+      take: 100
     })
   ]);
   return {
@@ -339,6 +383,7 @@ async function getAppState(req) {
     clearances: clearances.map(mapClearance),
     docs: trips.map(mapTrip),
     tripExpenses: tripExpenses.map(mapTripExpense),
+    fasahAppointments: fasahAppointments.map(mapFasahAppointment),
     accounts: accounts.map(account => ({ ...account, createdAt: account.createdAt.toISOString() })),
     ports
   };
@@ -352,18 +397,133 @@ router.get("/fasah/lookup", requireAdmin, async (req, res) => {
   const query = z.string().trim().min(1).max(100).safeParse(req.query.q);
   if (!query.success) return res.status(400).json({ error: "invalid_search_query" });
 
-  const clearances = await prisma.customsClearance.findMany({
-    where: {
-      OR: [
-        { declarationNumber: { contains: query.data, mode: "insensitive" } },
-        { container: { containerNumber: { contains: query.data, mode: "insensitive" } } }
-      ]
-    },
-    include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } },
-    orderBy: { createdAt: "desc" },
-    take: 50
+  const [clearances, appointments] = await Promise.all([
+    prisma.customsClearance.findMany({
+      where: {
+        OR: [
+          { declarationNumber: { contains: query.data, mode: "insensitive" } },
+          { container: { containerNumber: { contains: query.data, mode: "insensitive" } } }
+        ]
+      },
+      include: { container: true, port: true, attachments: { select: attachmentMetadataSelect } },
+      orderBy: { createdAt: "desc" },
+      take: 50
+    }),
+    prisma.fasahAppointment.findMany({
+      where: {
+        OR: [
+          { bookingReferenceNumber: { contains: query.data, mode: "insensitive" } },
+          { entryDeclarationNumber: { contains: query.data, mode: "insensitive" } },
+          { entryContainerNumber: { contains: query.data, mode: "insensitive" } },
+          { entryBlNumber: { contains: query.data, mode: "insensitive" } },
+          { exitDeclarationNumber: { contains: query.data, mode: "insensitive" } },
+          { exitContainerNumber: { contains: query.data, mode: "insensitive" } },
+          { exitBlNumber: { contains: query.data, mode: "insensitive" } },
+          { vehiclePlateNumber: { contains: query.data, mode: "insensitive" } },
+          { driverName: { contains: query.data, mode: "insensitive" } }
+        ]
+      },
+      include: { attachments: { select: attachmentMetadataSelect } },
+      orderBy: { createdAt: "desc" },
+      take: 50
+    })
+  ]);
+  res.json({
+    clearances: clearances.map(mapClearance),
+    appointments: appointments.map(mapFasahAppointment)
   });
-  res.json({ clearances: clearances.map(mapClearance) });
+});
+
+router.post("/fasah/appointments/preview", requireAdmin, async (req, res) => {
+  const input = z.object({
+    fileName: z.string().trim().min(1).max(255).regex(/\.pdf$/i),
+    data: z.string().min(1)
+  }).safeParse(req.body);
+  if (!input.success) return res.status(400).json({ error: "invalid_fasah_pdf" });
+
+  const [file] = parseManualAttachments([{
+    name: input.data.fileName,
+    type: "application/pdf",
+    data: input.data.data
+  }]);
+  const fields = await extractFasahAppointmentPdf(file.data);
+  res.json({ fields });
+});
+
+router.post("/fasah/appointments", requireAdmin, async (req, res) => {
+  const attachments = parseManualAttachments(req.body?.attachments);
+  if (attachments.length !== 1 || attachments[0].contentType !== "application/pdf") {
+    return res.status(400).json({ error: "invalid_fasah_pdf" });
+  }
+  const optionalText = max => z.string().trim().max(max).optional().default("");
+  const schema = z.object({
+    bookingReferenceNumber: z.string().trim().min(1).max(80),
+    operatorTicketNumber: optionalText(80),
+    zoneGateName: optionalText(160),
+    portContractorId: optionalText(80),
+    portContractorName: optionalText(160),
+    portName: optionalText(160),
+    appointmentDate: z.string().date().optional().or(z.literal("")),
+    appointmentTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).optional().or(z.literal("")),
+    vehiclePlateNumber: optionalText(64),
+    vehiclePlateType: optionalText(120),
+    vehicleColor: optionalText(64),
+    vehicleRefId: optionalText(80),
+    vehicleSerialId: optionalText(80),
+    vehicleModel: optionalText(120),
+    driverName: optionalText(160),
+    driverMobileNumber: optionalText(32),
+    driverLicenseNumber: optionalText(80),
+    entryLocation: optionalText(160),
+    entryBlNumber: optionalText(80),
+    entryDeclarationNumber: optionalText(80),
+    entryContainerNumber: optionalText(32),
+    entryCargoType: optionalText(160),
+    entrySerialNumber: optionalText(80),
+    exitLocation: optionalText(160),
+    exitBlNumber: optionalText(80),
+    exitDeclarationNumber: optionalText(80),
+    exitContainerNumber: optionalText(32),
+    exitCargoType: optionalText(160),
+    exitSerialNumber: optionalText(80)
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_fasah_appointment" });
+  const extracted = await extractFasahAppointmentPdf(attachments[0].data);
+  if (extracted.bookingReferenceNumber &&
+      extracted.bookingReferenceNumber !== parsed.data.bookingReferenceNumber) {
+    return res.status(409).json({ error: "fasah_pdf_reference_mismatch" });
+  }
+
+  let appointment;
+  try {
+    appointment = await prisma.$transaction(async tx => {
+      const created = await tx.fasahAppointment.create({
+        data: {
+          ...parsed.data,
+          appointmentDate: parsed.data.appointmentDate
+            ? new Date(`${parsed.data.appointmentDate}T00:00:00.000Z`)
+            : null,
+          attachments: { create: attachments }
+        },
+        include: { attachments: { select: attachmentMetadataSelect } }
+      });
+      await writeAudit(tx, req, "fasah_appointment.created", "FasahAppointment", created.id, {
+        bookingReferenceNumber: created.bookingReferenceNumber,
+        attachmentCount: attachments.length
+      });
+      return created;
+    });
+  } catch (error) {
+    if (error?.code === "P2002") {
+      throw Object.assign(new Error("fasah_appointment_exists"), {
+        statusCode: 409,
+        publicCode: "fasah_appointment_exists"
+      });
+    }
+    throw error;
+  }
+  res.status(201).json(mapFasahAppointment(appointment));
 });
 
 router.get("/import-templates/:type", requireAdmin, async (req, res) => {
@@ -471,18 +631,29 @@ router.post("/trucks/import", requireAdmin, async (req, res) => {
     }
     if (conflicts.length) throw importFailure("import_conflict", 409, conflicts);
 
-    for (const row of rows) {
-      const truck = await tx.truck.create({
-        data: {
-          fleetNumber: row.data.fleetNumber,
-          plateNumber: row.data.plateNumber,
-          serialNumber: row.data.serialNumber,
-          model: row.data.model,
-          assignedDriverId: driverIds.get(row.data.driverNationalId) || null
-        }
-      });
-      await writeAudit(tx, req, "truck.imported", "Truck", truck.id, { row: row.row });
-    }
+    await tx.truck.createMany({
+      data: rows.map(({ data }) => ({
+        fleetNumber: data.fleetNumber,
+        plateNumber: data.plateNumber,
+        serialNumber: data.serialNumber,
+        model: data.model,
+        assignedDriverId: driverIds.get(data.driverNationalId) || null
+      }))
+    });
+    const createdTrucks = await tx.truck.findMany({
+      where: { fleetNumber: { in: rows.map(row => row.data.fleetNumber) } },
+      select: { id: true, fleetNumber: true }
+    });
+    const truckIds = new Map(createdTrucks.map(truck => [truck.fleetNumber, truck.id]));
+    await tx.auditLog.createMany({
+      data: rows.map(row => ({
+        actorId: req.user.id,
+        action: "truck.imported",
+        entityType: "Truck",
+        entityId: truckIds.get(row.data.fleetNumber),
+        metadata: { row: row.row }
+      }))
+    });
   });
   res.status(201).json({ imported: rows.length });
 });
@@ -1009,7 +1180,8 @@ router.get("/attachments/:id", async (req, res) => {
     include: {
       clearance: { select: { trip: { select: { driverId: true } } } },
       transportDocument: { select: { trip: { select: { driverId: true } } } },
-      tripExpense: { select: { trip: { select: { driverId: true } } } }
+      tripExpense: { select: { trip: { select: { driverId: true } } } },
+      fasahAppointment: { select: { id: true } }
     }
   });
   if (!attachment) return res.status(404).json({ error: "record_not_found" });

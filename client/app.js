@@ -49,6 +49,78 @@ const TRANSLATIONS = Object.freeze({
   "حفظ التكلفة": "Save Expense",
   "مصروفاتي المسجلة": "My Recorded Expenses",
   "لا توجد تكاليف مسجلة.": "No expenses recorded.",
+  "رفع تذكرة موعد فسح PDF": "Upload Fasah Appointment PDF",
+  "استخراج تفاصيل الحجز والمركبة والسائق والدخول والخروج محلياً، ثم مراجعتها قبل الحفظ.": "Extract booking, vehicle, driver, entry, and exit details locally, then review them before saving.",
+  "ملف PDF الخاص بفسح": "Fasah PDF file",
+  "ملف PDF نصي حتى 5 MB. الملفات الممسوحة ضوئياً غير مدعومة حالياً.": "Text-based PDF up to 5 MB. Scanned PDFs are not supported yet.",
+  "استخراج البيانات": "Extract Data",
+  "تفاصيل الحجز": "Booking Details",
+  "رقم تذكرة المشغل": "Operator Ticket Number",
+  "المنطقة / البوابة": "Zone / Gate",
+  "اسم مشغل الميناء": "Port Contractor Name",
+  "رقم مشغل الميناء": "Port Contractor ID",
+  "تاريخ الموعد": "Appointment Date",
+  "وقت الموعد": "Appointment Time",
+  "تفاصيل المركبة": "Vehicle Details",
+  "نوع لوحة المركبة": "Vehicle Plate Type",
+  "اللون": "Color",
+  "رقم تتبع المركبة": "Vehicle Reference ID",
+  "الرقم التسلسلي للمركبة": "Vehicle Serial ID",
+  "طراز المركبة": "Vehicle Model",
+  "تفاصيل السائق": "Driver Details",
+  "رقم جوال السائق": "Driver Mobile Number",
+  "رقم رخصة السائق": "Driver License Number",
+  "معلومات الدخول": "Entry Information",
+  "الموقع داخل الميناء": "Location Within Port",
+  "رقم البوليصة": "BL Number",
+  "نوع البضاعة / الغرض": "Cargo Type / Purpose",
+  "معلومات الخروج": "Exit Information",
+  "الرقم المرجعي": "Reference Number",
+  "الميناء / الموعد": "Port / Appointment",
+  "المركبة": "Vehicle",
+  "السائق / الجوال": "Driver / Mobile",
+  "بيانات الخروج": "Exit Details",
+  "البوليصة / البضاعة": "BL / Cargo",
+  "الملف الأصلي": "Original File",
+  "ملف PDF الأصلي": "Original PDF",
+  "موعد فسح": "Fasah Appointment",
+  "موعد محفوظ": "Appointment Saved",
+  "الرقم المرجعي للحجز": "Booking Reference Number",
+  "رقم لوحة المركبة": "Vehicle Plate Number",
+  "رقم البيان": "Declaration Number",
+  "بوليصة الدخول": "Entry BL Number",
+  "بيان الدخول": "Entry Declaration Number",
+  "حاوية الدخول": "Entry Container Number",
+  "بضاعة الدخول / الغرض": "Entry Cargo / Purpose",
+  "الرقم التسلسلي للدخول": "Entry Serial Number",
+  "موقع الدخول داخل الميناء": "Entry Location Within Port",
+  "بوليصة الخروج": "Exit BL Number",
+  "بيان الخروج": "Exit Declaration Number",
+  "حاوية الخروج": "Exit Container Number",
+  "بضاعة الخروج / الغرض": "Exit Cargo / Purpose",
+  "الرقم التسلسلي للخروج": "Exit Serial Number",
+  "موقع الخروج داخل الميناء": "Exit Location Within Port",
+  "اختر ملف PDF صحيحاً.": "Choose a valid PDF file.",
+  "ارفع ملف PDF لتذكرة الموعد.": "Upload the appointment PDF.",
+  "ابحث في السجلات أو ارفع تذكرة موعد فسح PDF لاستخراج بياناتها.": "Search records or upload a Fasah appointment PDF to extract its details.",
+  "البحث يشمل بيانات الفسح المسجلة ومواعيد PDF المحفوظة.": "Search includes recorded clearances and saved PDF appointments.",
+  "ابحث عن بيان أو موعد فسح مسجل.": "Search for a saved clearance or Fasah appointment.",
+  "رقم مرجع الحجز مسجل مسبقاً.": "This booking reference is already registered.",
+  "بيانات الحجز لا تطابق ملف PDF المرفق.": "The booking details do not match the attached PDF.",
+  "تعذر قراءة الملف. ارفع تذكرة فسح بصيغة PDF ولا يتجاوز حجمها 5 MB.": "Could not read the file. Upload a Fasah PDF ticket no larger than 5 MB.",
+  "الملف ليس تذكرة موعد فسح بالتنسيق المدعوم.": "This PDF is not a supported Fasah appointment ticket.",
+  "تعذر استخراج النص من الملف. استخدم PDF نصياً غير ممسوح ضوئياً.": "Could not extract text. Use a text-based PDF, not a scan.",
+  "الحد الأقصى لتذكرة الموعد هو 5 صفحات.": "Appointment tickets are limited to 5 pages.",
+  "تحقق من الرقم المرجعي والحقول المدخلة.": "Check the booking reference and entered fields.",
+  "حفظ الموعد وملف PDF": "Save Appointment and PDF",
+  "إلغاء": "Cancel",
+  "سجل مواعيد فسح المرفوعة": "Uploaded Fasah Appointments",
+  "تفاصيل الحجز والمركبة والسائق ومعلومات الدخول والخروج.": "Booking, vehicle, driver, entry, and exit details.",
+  "تم استخراج البيانات؛ راجعها ثم احفظ السجل.": "Data extracted. Review it and save the record.",
+  "بعض الحقول الأساسية لم تُستخرج. أكملها يدوياً قبل الحفظ.": "Some required fields were not extracted. Complete them before saving.",
+  "تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.": "Fasah appointment and PDF saved. Ticket data does not confirm customs clearance status.",
+  "لا توجد مواعيد فسح محفوظة.": "No Fasah appointments saved.",
+  "لم يُعثر على مواعيد فسح مطابقة.": "No matching Fasah appointments found.",
   "لا توجد رحلات مقبولة لإضافة تكلفة.": "There are no accepted trips to add an expense to.",
   "تم تسجيل التكلفة.": "Expense recorded.",
   "تحقق من مبلغ ونوع المصروف والرحلة.": "Check the expense amount, type, and trip.",
@@ -78,6 +150,9 @@ const TRANSLATIONS = Object.freeze({
   "لم يتم استيراد البيانات بسبب وجود تعارض في الصفوف:": "No data was imported because some rows conflict:",
   "بيانات الصف غير صالحة.": "The row data is invalid.",
   "تم تنزيل نموذج Excel.": "Excel template downloaded.",
+  "لا توجد شاحنة متاحة مرتبطة بهذا السائق. عيّن شاحنة متاحة من شاشة الأسطول.": "No available truck is assigned to this driver. Assign an available truck in Fleet.",
+  "توجد أكثر من شاحنة متاحة مرتبطة بهذا السائق. اختر الشاحنة يدوياً.": "More than one available truck is assigned to this driver. Select a truck manually.",
+  "الشاحنة المحددة لا ترتبط بسائق نشط له حساب. حدّث تعيين السائق من شاشة الأسطول.": "The selected truck is not assigned to an active driver with an account. Update its driver assignment in Fleet.",
   "متابعة الأسطول": "Fleet Tracking",
   "تابع الرحلات بعد قبول السائق وتحديث مراحلها. لا تعرض هذه الشاشة موقع GPS مباشراً.": "Track trips after the driver accepts them and records stage updates. This screen does not show live GPS location.",
   "تحديث الآن": "Refresh now",
@@ -728,7 +803,7 @@ function dateOffset(days) {
   return dateOnly(date);
 }
 
-let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [], tripExpenses: [] };
+let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [], tripExpenses: [], fasahAppointments: [] };
 let toastTimer;
 let currentAccount = null;
 let fasahSearchSequence = 0;
@@ -862,6 +937,13 @@ const API_ERRORS = {
   expense_trip_unavailable: "لا يمكن إضافة تكلفة لهذه الرحلة.",
   driver_only: "هذه الخدمة متاحة لحسابات السائقين فقط.",
   invalid_excel_file: "تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx.",
+  invalid_fasah_pdf: "تعذر قراءة الملف. ارفع تذكرة فسح بصيغة PDF ولا يتجاوز حجمها 5 MB.",
+  unsupported_fasah_pdf: "الملف ليس تذكرة موعد فسح بالتنسيق المدعوم.",
+  fasah_pdf_text_unavailable: "تعذر استخراج النص من الملف. استخدم PDF نصياً غير ممسوح ضوئياً.",
+  fasah_pdf_page_limit: "الحد الأقصى لتذكرة الموعد هو 5 صفحات.",
+  invalid_fasah_appointment: "تحقق من الرقم المرجعي والحقول المدخلة.",
+  fasah_appointment_exists: "رقم مرجع الحجز مسجل مسبقاً.",
+  fasah_pdf_reference_mismatch: "بيانات الحجز لا تطابق ملف PDF المرفق.",
   import_file_too_large: "حجم ملف Excel يجب ألا يتجاوز 3 MB.",
   import_row_limit_exceeded: "الحد الأقصى 500 صف في ملف Excel.",
   import_empty: "الملف لا يحتوي على بيانات للاستيراد.",
@@ -976,6 +1058,7 @@ async function refreshServerState() {
   trackingLastUpdatedAt = new Date();
   renderDashboard();
   renderFasahResults($("#fasah-query").value);
+  renderFasahAppointments();
   renderFleet();
   renderDrivers();
   populateTruckDriverOptions();
@@ -1245,6 +1328,65 @@ function renderDashboard() {
     </tr>`).join("") : `<tr><td colspan="6" class="empty-row">لا توجد عمليات بعد. ابدأ بالاستعلام عن بيان.</td></tr>`;
 }
 
+function renderFasahAppointmentCard(appointment) {
+  const details = [
+    ["الرقم المرجعي للحجز", appointment.bookingReferenceNumber],
+    ["رقم تذكرة المشغل", appointment.operatorTicketNumber],
+    ["المنطقة / البوابة", appointment.zoneGateName],
+    ["اسم مشغل الميناء", appointment.portContractorName],
+    ["رقم مشغل الميناء", appointment.portContractorId],
+    ["الميناء", appointment.portName],
+    ["تاريخ الموعد", appointment.appointmentDate],
+    ["وقت الموعد", appointment.appointmentTime],
+    ["رقم لوحة المركبة", appointment.vehiclePlateNumber],
+    ["نوع لوحة المركبة", appointment.vehiclePlateType],
+    ["اللون", appointment.vehicleColor],
+    ["رقم تتبع المركبة", appointment.vehicleRefId],
+    ["الرقم التسلسلي للمركبة", appointment.vehicleSerialId],
+    ["طراز المركبة", appointment.vehicleModel],
+    ["اسم السائق", appointment.driverName],
+    ["رقم جوال السائق", appointment.driverMobileNumber],
+    ["رقم رخصة السائق", appointment.driverLicenseNumber],
+    ["موقع الدخول داخل الميناء", appointment.entryLocation],
+    ["بوليصة الدخول", appointment.entryBlNumber],
+    ["بيان الدخول", appointment.entryDeclarationNumber],
+    ["حاوية الدخول", appointment.entryContainerNumber],
+    ["بضاعة الدخول / الغرض", appointment.entryCargoType],
+    ["الرقم التسلسلي للدخول", appointment.entrySerialNumber],
+    ["موقع الخروج داخل الميناء", appointment.exitLocation],
+    ["بوليصة الخروج", appointment.exitBlNumber],
+    ["بيان الخروج", appointment.exitDeclarationNumber],
+    ["حاوية الخروج", appointment.exitContainerNumber],
+    ["بضاعة الخروج / الغرض", appointment.exitCargoType],
+    ["الرقم التسلسلي للخروج", appointment.exitSerialNumber]
+  ].filter(([, value]) => value);
+  return `<article class="result-card">
+    <div class="result-card-head"><div><h3>${translateText("موعد فسح")}: ${escapeHtml(appointment.bookingReferenceNumber)}</h3><p>${escapeHtml(appointment.portName || "—")} · ${formatDate(appointment.appointmentDate)}</p></div><span class="status-pill status-neutral">${translateText("موعد محفوظ")}</span></div>
+    <div class="result-details">${details.map(([label, value]) => `<div class="detail-item"><small>${translateText(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>
+    ${renderAttachmentLinks(appointment.attachments, "ملف PDF الأصلي")}
+  </article>`;
+}
+
+function renderFasahAppointments() {
+  const query = $("#fasah-query").value.trim().toLocaleLowerCase("en");
+  const appointments = (state.fasahAppointments || []).filter(appointment =>
+    !query || Object.values(appointment).some(value =>
+      typeof value === "string" && value.toLocaleLowerCase("en").includes(query)
+    )
+  );
+  $("#fasah-appointment-count").textContent = appointments.length;
+  $("#fasah-appointment-rows").innerHTML = appointments.length ? appointments.map(appointment => `
+    <tr>
+      <td>${escapeHtml(appointment.bookingReferenceNumber)}</td>
+      <td>${escapeHtml(appointment.portName || "—")}<br>${formatDate(appointment.appointmentDate)} ${escapeHtml(appointment.appointmentTime || "")}</td>
+      <td>${escapeHtml(appointment.vehiclePlateNumber || "—")}<br>${escapeHtml(appointment.vehicleModel || "—")}</td>
+      <td>${escapeHtml(appointment.driverName || "—")}<br>${escapeHtml(appointment.driverMobileNumber || "—")}</td>
+      <td>البيان: ${escapeHtml(appointment.exitDeclarationNumber || "—")}<br>الحاوية: ${escapeHtml(appointment.exitContainerNumber || "—")}</td>
+      <td>${escapeHtml(appointment.exitBlNumber || "—")}<br>${escapeHtml(appointment.exitCargoType || "—")}</td>
+      <td>${renderAttachmentLinks(appointment.attachments, "ملف PDF الأصلي") || "—"}</td>
+    </tr>`).join("") : `<tr><td colspan="7" class="empty-row">${translateText(query ? "لم يُعثر على مواعيد فسح مطابقة." : "لا توجد مواعيد فسح محفوظة.")}</td></tr>`;
+}
+
 async function renderFasahResults(query) {
   const container = $("#fasah-results");
   const term = String(query || "").trim().toLowerCase();
@@ -1255,10 +1397,18 @@ async function renderFasahResults(query) {
   const searchId = ++fasahSearchSequence;
   container.innerHTML = `<div class="panel empty-state"><strong>جارٍ البحث في سجلات الفسح المحفوظة…</strong></div>`;
   let matches;
+  let appointmentMatches;
   try {
     const result = await apiRequest(`/api/fasah/lookup?q=${encodeURIComponent(term)}`);
     if (searchId !== fasahSearchSequence) return;
     matches = Array.isArray(result.clearances) ? result.clearances : [];
+    appointmentMatches = Array.isArray(result.appointments) ? result.appointments : [];
+    const appointmentIds = new Set(appointmentMatches.map(item => item.id));
+    state.fasahAppointments = [
+      ...appointmentMatches,
+      ...(state.fasahAppointments || []).filter(item => !appointmentIds.has(item.id))
+    ].slice(0, 100);
+    renderFasahAppointments();
     for (const clearance of matches) {
       const index = state.clearances.findIndex(item => item.id === clearance.id);
       if (index === -1) state.clearances.push(clearance);
@@ -1269,11 +1419,11 @@ async function renderFasahResults(query) {
     container.innerHTML = `<div class="panel empty-state"><strong>${escapeHtml(error.message)}</strong></div>`;
     return;
   }
-  if (!matches.length) {
-    container.innerHTML = translateText(`<div class="panel empty-state"><span>⌕</span><strong>لم يتم العثور على نتائج</strong><p>ابحث عن بيان مسجل يدوياً أو أدخل بياناته.</p></div>`);
+  if (!matches.length && !appointmentMatches.length) {
+    container.innerHTML = translateText(`<div class="panel empty-state"><span>⌕</span><strong>لم يتم العثور على نتائج</strong><p>ابحث عن بيان أو موعد فسح مسجل.</p></div>`);
     return;
   }
-  container.innerHTML = translateText(matches.map(item => {
+  const clearanceCards = matches.map(item => {
     const alreadyIssued = state.docs.some(doc => doc.clearanceId === item.id);
     return `<article class="result-card">
       <div class="result-card-head"><div><h3>بيان جمركي: ${escapeHtml(item.declarationNumber)}</h3><p>حاوية ${escapeHtml(item.containerNumber)} · بيانات مدخلة يدوياً وغير متحققة من منصة فسح</p></div>${clearanceStatusPill(item.status)}</div>
@@ -1291,7 +1441,14 @@ async function renderFasahResults(query) {
         : `<button class="button button-primary" data-action="issue-clearance" data-id="${escapeHtml(item.id)}" ${item.status !== "CLEARED" ? "disabled" : ""}>إنشاء طلب رحلة <span>←</span></button>`}
       </div>
     </article>`;
-  }).join(""));
+  }).join("");
+  container.innerHTML = translateText(clearanceCards) + appointmentMatches.map(renderFasahAppointmentCard).join("");
+}
+
+function hasActiveDriverAccount(driverId) {
+  return state.accounts.some(account =>
+    account.role === "DRIVER" && account.driverId === driverId && account.isActive && !account.deletedAt
+  );
 }
 
 function populateIssueOptions(selectedId = "") {
@@ -1305,15 +1462,54 @@ function populateIssueOptions(selectedId = "") {
   }).join("");
   if (existingClearance && clearanceById(existingClearance)) clearanceSelect.value = existingClearance;
   const currentTruck = truckSelect.value;
+  const currentDriver = driverSelect.value;
   const availableTrucks = state.trucks.filter(item => !item.deletedAt && item.status === "AVAILABLE");
   truckSelect.innerHTML = `<option value="">اختر الشاحنة</option>` + availableTrucks.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.fleetNumber)} — ${escapeHtml(item.plateNumber)}</option>`).join("");
   if (availableTrucks.some(item => item.id === currentTruck)) truckSelect.value = currentTruck;
-  driverSelect.innerHTML = `<option value="">اختر السائق</option>` + state.drivers.filter(item => !item.deletedAt && item.isActive).map(item => {
-    const hasAccount = state.accounts.some(account => account.role === "DRIVER" && account.driverId === item.id && !account.deletedAt);
-    return `<option value="${escapeHtml(item.id)}" ${hasAccount ? "" : "disabled"}>${escapeHtml(item.name)}${hasAccount ? "" : " — لا يوجد حساب"}</option>`;
-  }).join("");
+  const availableDrivers = state.drivers.filter(item => !item.deletedAt && item.isActive).map(item => ({
+    ...item,
+    hasAccount: hasActiveDriverAccount(item.id)
+  }));
+  driverSelect.innerHTML = `<option value="">اختر السائق</option>` + availableDrivers.map(item =>
+    `<option value="${escapeHtml(item.id)}" ${item.hasAccount ? "" : "disabled"}>${escapeHtml(item.name)}${item.hasAccount ? "" : " — لا يوجد حساب"}</option>`
+  ).join("");
+  if (availableDrivers.some(item => item.id === currentDriver && item.hasAccount)) driverSelect.value = currentDriver;
+  if (truckSelect.value) syncIssueTruckDriver("truck", false);
+  else if (driverSelect.value) syncIssueTruckDriver("driver", false);
   if (!$("#issue-return-date").value) $("#issue-return-date").value = dateOffset(5);
   renderSelectedClearance();
+}
+
+function syncIssueTruckDriver(source, notify = true) {
+  const truckSelect = $("#issue-truck");
+  const driverSelect = $("#issue-driver");
+  const availableTrucks = state.trucks.filter(item => !item.deletedAt && item.status === "AVAILABLE");
+
+  if (source === "truck") {
+    const truck = availableTrucks.find(item => item.id === truckSelect.value);
+    const driver = truck && state.drivers.find(item =>
+      item.id === truck.driverId && !item.deletedAt && item.isActive &&
+      hasActiveDriverAccount(item.id)
+    );
+    driverSelect.value = driver?.id || "";
+    if (truck && !driver && notify) {
+      showToast("الشاحنة المحددة لا ترتبط بسائق نشط له حساب. حدّث تعيين السائق من شاشة الأسطول.", true);
+    }
+    return;
+  }
+
+  const driverId = driverSelect.value;
+  const matches = availableTrucks.filter(item => item.driverId === driverId);
+  if (matches.length === 1) {
+    truckSelect.value = matches[0].id;
+    return;
+  }
+  truckSelect.value = "";
+  if (driverId && notify) {
+    showToast(matches.length > 1
+      ? "توجد أكثر من شاحنة متاحة مرتبطة بهذا السائق. اختر الشاحنة يدوياً."
+      : "لا توجد شاحنة متاحة مرتبطة بهذا السائق. عيّن شاحنة متاحة من شاشة الأسطول.", true);
+  }
 }
 
 function renderSelectedClearance() {
@@ -2244,6 +2440,76 @@ async function handleClearanceSubmit(event) {
   }
 }
 
+async function handleFasahPdfPreview(event) {
+  event.preventDefault();
+  const fileInput = $("#fasah-appointment-file");
+  const extractButton = $("#fasah-pdf-extract-button");
+  extractButton.disabled = true;
+  try {
+    const [file] = await encodeSelectedAttachments(fileInput);
+    if (!file || file.type !== "application/pdf") throw new Error(translateText("اختر ملف PDF صحيحاً."));
+    const result = await apiRequest("/api/fasah/appointments/preview", {
+      method: "POST",
+      body: { fileName: file.name, data: file.data }
+    });
+    const form = $("#fasah-appointment-review-form");
+    for (const [key, value] of Object.entries(result.fields || {})) {
+      const input = form.elements.namedItem(key);
+      if (input && typeof value === "string") input.value = value;
+    }
+    fileInput.disabled = true;
+    form.classList.remove("hidden");
+    const message = $("#fasah-pdf-message");
+    message.textContent = result.fields?.missingFields?.length
+      ? translateText("بعض الحقول الأساسية لم تُستخرج. أكملها يدوياً قبل الحفظ.")
+      : translateText("تم استخراج البيانات؛ راجعها ثم احفظ السجل.");
+    message.classList.remove("hidden");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    extractButton.disabled = false;
+  }
+}
+
+async function handleFasahAppointmentSave(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const saveButton = $("#fasah-appointment-save");
+  saveButton.disabled = true;
+  try {
+    const attachments = await encodeSelectedAttachments($("#fasah-appointment-file"));
+    if (attachments.length !== 1 || attachments[0].type !== "application/pdf") {
+      throw new Error(translateText("ارفع ملف PDF لتذكرة الموعد."));
+    }
+    const values = Object.fromEntries(new FormData(form).entries());
+    const appointment = await apiRequest("/api/fasah/appointments", {
+      method: "POST",
+      body: { ...values, attachments }
+    });
+    $("#fasah-pdf-extract-form").reset();
+    $("#fasah-appointment-file").disabled = false;
+    form.reset();
+    form.classList.add("hidden");
+    $("#fasah-pdf-message").classList.add("hidden");
+    await refreshServerState();
+    $("#fasah-query").value = appointment.bookingReferenceNumber;
+    await renderFasahResults(appointment.bookingReferenceNumber);
+    showToast("تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
+function cancelFasahAppointmentPreview() {
+  $("#fasah-pdf-extract-form").reset();
+  $("#fasah-appointment-review-form").reset();
+  $("#fasah-appointment-review-form").classList.add("hidden");
+  $("#fasah-appointment-file").disabled = false;
+  $("#fasah-pdf-message").classList.add("hidden");
+}
+
 async function handleDriverSubmit(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2372,12 +2638,18 @@ function init() {
   $("#fasah-search-form").addEventListener("submit", event => {
     event.preventDefault();
     renderFasahResults($("#fasah-query").value);
+    renderFasahAppointments();
   });
+  $("#fasah-pdf-extract-form").addEventListener("submit", handleFasahPdfPreview);
+  $("#fasah-appointment-review-form").addEventListener("submit", handleFasahAppointmentSave);
+  $("#fasah-appointment-cancel").addEventListener("click", cancelFasahAppointmentPreview);
   $("#clearance-form").addEventListener("submit", handleClearanceSubmit);
   $("#clearance-port").addEventListener("change", event => {
     $("#clearance-port-city").value = PORT_CITIES[event.target.value] || "";
   });
   $("#issue-clearance").addEventListener("change", renderSelectedClearance);
+  $("#issue-truck").addEventListener("change", () => syncIssueTruckDriver("truck"));
+  $("#issue-driver").addEventListener("change", () => syncIssueTruckDriver("driver"));
   $("#issue-form").addEventListener("submit", issueDocument);
   $("#truck-filter").addEventListener("input", renderFleet);
   $("#driver-filter").addEventListener("input", renderDrivers);
