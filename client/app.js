@@ -104,11 +104,11 @@ const TRANSLATIONS = Object.freeze({
   "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
   "تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.": "Declaration, container, and port were filled from the ticket. Size defaults to 40 feet; container type and clearance date are not provided by the appointment ticket, so enter them manually.",
   "جلب أحدث بيانات مستخرجة من PDF": "Load latest data extracted from PDF",
-  "سيتم استخدام أحدث تذكرة PDF محفوظة.": "The most recently saved PDF ticket will be used.",
+  "سيتم استخدام أحدث تذكرة تم استخراج بياناتها.": "The most recently extracted PDF ticket will be used.",
   "لا توجد بيانات PDF محفوظة. ارفع تذكرة فسح واستخرج بياناتها أولاً.": "No PDF data is saved. Upload and extract a Fasah ticket first.",
   "أحدث تذكرة PDF لا تحتوي رقم البيان أو رقم الحاوية.": "The latest PDF ticket does not contain a declaration or container number.",
-  "تم جلب بيانات الفسح من أحدث PDF محفوظ.": "Clearance data was loaded from the latest saved PDF.",
-  "تم جلب البيانات المتاحة من أحدث PDF. أكمل رقم البيان أو الحاوية الناقص يدوياً.": "Available data was loaded from the latest PDF. Enter the missing declaration or container number manually.",
+  "تم جلب بيانات الفسح من أحدث PDF مستخرج.": "Clearance data was loaded from the latest extracted PDF.",
+  "تم جلب البيانات المتاحة من أحدث PDF مستخرج. أكمل رقم البيان أو الحاوية الناقص يدوياً.": "Available data was loaded from the latest extracted PDF. Enter the missing declaration or container number manually.",
   "أؤكد أن حالة الفسح وتاريخه مطابقان لإثبات فسح رسمي، وليس لتذكرة موعد فقط.": "I confirm the clearance status and date match official clearance proof, not just an appointment ticket.",
   "أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.": "Confirm the clearance status and date using official documentation before saving.",
   "تم إصدار وثيقة لهذا البيان.": "A document has already been issued for this declaration.",
@@ -834,6 +834,7 @@ function dateOffset(days) {
 }
 
 let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [], tripExpenses: [], fasahAppointments: [] };
+let latestFasahPdfExtraction = null;
 let toastTimer;
 let currentAccount = null;
 let fasahSearchSequence = 0;
@@ -1480,9 +1481,20 @@ function fillClearanceFormFromAppointment(appointment, appointmentId = null, res
 }
 
 function fillClearanceFromLatestPdf() {
-  const appointment = [...(state.fasahAppointments || [])].sort((left, right) =>
+  const latestSavedAppointment = [...(state.fasahAppointments || [])].sort((left, right) =>
     Date.parse(right.createdAt) - Date.parse(left.createdAt)
   )[0];
+  const savedAt = latestSavedAppointment
+    ? Date.parse(latestSavedAppointment.createdAt)
+    : Number.NEGATIVE_INFINITY;
+  const useCurrentExtraction = Boolean(latestFasahPdfExtraction) &&
+    latestFasahPdfExtraction.extractedAt >= savedAt;
+  const appointment = useCurrentExtraction
+    ? latestFasahPdfExtraction.fields
+    : latestSavedAppointment;
+  const appointmentId = useCurrentExtraction
+    ? latestFasahPdfExtraction.appointmentId
+    : latestSavedAppointment?.id;
   if (!appointment) {
     return showToast("لا توجد بيانات PDF محفوظة. ارفع تذكرة فسح واستخرج بياناتها أولاً.", true);
   }
@@ -1495,10 +1507,10 @@ function fillClearanceFromLatestPdf() {
     return showToast("أحدث تذكرة PDF لا تحتوي رقم البيان أو رقم الحاوية.", true);
   }
 
-  const complete = fillClearanceFormFromAppointment(appointment, appointment.id, false);
+  const complete = fillClearanceFormFromAppointment(appointment, appointmentId, false);
   showToast(complete
-    ? "تم جلب بيانات الفسح من أحدث PDF محفوظ."
-    : "تم جلب البيانات المتاحة من أحدث PDF. أكمل رقم البيان أو الحاوية الناقص يدوياً.", !complete);
+    ? "تم جلب بيانات الفسح من أحدث PDF مستخرج."
+    : "تم جلب البيانات المتاحة من أحدث PDF مستخرج. أكمل رقم البيان أو الحاوية الناقص يدوياً.", !complete);
 }
 
 function updateClearanceConfirmation() {
@@ -2695,6 +2707,11 @@ async function handleFasahPdfPreview(event) {
       method: "POST",
       body: { fileName: file.name, data: file.data }
     });
+    latestFasahPdfExtraction = {
+      fields: result.fields || {},
+      extractedAt: Date.now(),
+      appointmentId: null
+    };
     const form = $("#fasah-appointment-review-form");
     for (const [key, value] of Object.entries(result.fields || {})) {
       const input = form.elements.namedItem(key);
@@ -2733,6 +2750,11 @@ async function handleFasahAppointmentSave(event) {
       method: "POST",
       body: { ...values, attachments }
     });
+    latestFasahPdfExtraction = {
+      fields: appointment,
+      extractedAt: Date.parse(appointment.createdAt) || Date.now(),
+      appointmentId: appointment.id
+    };
     $("#fasah-pdf-extract-form").reset();
     $("#fasah-appointment-file").disabled = false;
     form.reset();
@@ -2746,7 +2768,7 @@ async function handleFasahAppointmentSave(event) {
       normalizeContainerNumber(item.containerNumber) === normalizeContainerNumber(containerNumber)
     );
     const clearanceFieldsComplete = !hasExistingClearance &&
-      fillClearanceFormFromAppointment(appointment, appointment.id);
+      fillClearanceFormFromAppointment(appointment, appointment.id, false);
     showToast(clearanceFieldsComplete
       ? "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً."
       : "تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.");
@@ -2758,6 +2780,9 @@ async function handleFasahAppointmentSave(event) {
 }
 
 function cancelFasahAppointmentPreview() {
+  if (latestFasahPdfExtraction && !latestFasahPdfExtraction.appointmentId) {
+    latestFasahPdfExtraction = null;
+  }
   $("#fasah-pdf-extract-form").reset();
   $("#fasah-appointment-review-form").reset();
   $("#fasah-appointment-review-form").classList.add("hidden");
