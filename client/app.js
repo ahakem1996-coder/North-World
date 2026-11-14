@@ -100,6 +100,7 @@ const TRANSLATIONS = Object.freeze({
   "تعذر العثور على موعد فسح محفوظ.": "Could not find a saved Fasah appointment.",
   "لا تتضمن التذكرة رقم بيان وحاوية صالحين.": "The ticket does not contain a valid declaration and container number.",
   "تم تسجيل بيانات الحاوية من التذكرة والانتقال إلى إصدار الرحلة.": "Container details were recorded from the ticket and the trip form is ready.",
+  "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً.": "The Fasah appointment and PDF were saved, and the clearance form was filled automatically.",
   "تم مطابقة رقم الجوال مع السائق المسجل.": "The phone number matched the registered driver.",
   "تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.": "Declaration, container, and port were filled from the ticket. Size defaults to 40 feet; container type and clearance date are not provided by the appointment ticket, so enter them manually.",
   "أؤكد أن حالة الفسح وتاريخه مطابقان لإثبات فسح رسمي، وليس لتذكرة موعد فقط.": "I confirm the clearance status and date match official clearance proof, not just an appointment ticket.",
@@ -1441,6 +1442,30 @@ function appointmentPortName(portName) {
   return "";
 }
 
+function fillClearanceFormFromAppointment(appointment, appointmentId = null) {
+  const declarationNumber = appointmentDeclarationNumber(appointment).trim();
+  const containerNumber = appointmentContainerNumber(appointment).trim();
+  if (!declarationNumber && !containerNumber) return false;
+
+  pendingFasahAppointmentId = appointmentId;
+  const form = $("#clearance-form");
+  form.reset();
+  form.elements.namedItem("declarationNumber").value = declarationNumber;
+  form.elements.namedItem("containerNumber").value = containerNumber;
+  form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
+  form.elements.namedItem("type").value = appointment.containerType || "";
+  form.elements.namedItem("status").value = "CLEARED";
+  form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
+  $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
+  $("#clearance-confirmed").checked = false;
+  const portSelect = $("#clearance-port");
+  portSelect.value = appointmentPortName(appointment.portName);
+  portSelect.dispatchEvent(new Event("change"));
+  updateClearanceConfirmation();
+  $("#clearance-form-wrap").classList.remove("hidden");
+  return Boolean(declarationNumber && containerNumber);
+}
+
 function updateClearanceConfirmation() {
   const isCleared = $("#clearance-status").value === "CLEARED";
   const checkbox = $("#clearance-confirmed");
@@ -1516,24 +1541,9 @@ function prepareTripFromFasahAppointment(id) {
     return;
   }
 
-  pendingFasahAppointmentId = appointment.id;
-  const form = $("#clearance-form");
-  form.reset();
-  form.elements.namedItem("declarationNumber").value = declarationNumber;
-  form.elements.namedItem("containerNumber").value = containerNumber;
-  form.elements.namedItem("size").value = appointment.containerSize || "FT_40";
-  form.elements.namedItem("type").value = appointment.containerType || "";
-  form.elements.namedItem("status").value = "CLEARED";
-  form.elements.namedItem("clearedAt").value = appointment.clearedAt || "";
-  $("#clearance-declaration-field").classList.toggle("hidden", Boolean(declarationNumber));
-  $("#clearance-confirmed").checked = false;
-  const portSelect = $("#clearance-port");
-  portSelect.value = appointmentPortName(appointment.portName);
-  portSelect.dispatchEvent(new Event("change"));
-  updateClearanceConfirmation();
-  $("#clearance-form-wrap").classList.remove("hidden");
+  fillClearanceFormFromAppointment(appointment, appointment.id);
   showToast("تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#clearance-form").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function renderFasahResults(query) {
@@ -2651,13 +2661,17 @@ async function handleFasahPdfPreview(event) {
       const input = form.elements.namedItem(key);
       if (input && typeof value === "string") input.value = value;
     }
+    const clearanceFieldsComplete = fillClearanceFormFromAppointment(result.fields || {});
     fileInput.disabled = true;
     form.classList.remove("hidden");
     const message = $("#fasah-pdf-message");
-    message.textContent = result.fields?.missingFields?.length
+    message.textContent = result.fields?.missingFields?.length || !clearanceFieldsComplete
       ? translateText("بعض الحقول الأساسية لم تُستخرج. أكملها يدوياً قبل الحفظ.")
       : translateText("تم استخراج البيانات؛ راجعها ثم احفظ السجل.");
     message.classList.remove("hidden");
+    if (clearanceFieldsComplete) {
+      showToast("تم ملء البيان والحاوية والميناء من التذكرة. المقاس افتراضياً 40 قدم؛ نوع الحاوية وتاريخ الفسح غير متوفرين في تذكرة الموعد، فأدخلهما يدوياً.");
+    }
   } catch (error) {
     showToast(error.message, true);
   } finally {
@@ -2688,7 +2702,15 @@ async function handleFasahAppointmentSave(event) {
     await refreshServerState();
     $("#fasah-query").value = appointment.bookingReferenceNumber;
     await renderFasahResults(appointment.bookingReferenceNumber);
-    showToast("تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.");
+    const containerNumber = appointmentContainerNumber(appointment);
+    const hasExistingClearance = Boolean(containerNumber) && state.clearances.some(item =>
+      normalizeContainerNumber(item.containerNumber) === normalizeContainerNumber(containerNumber)
+    );
+    const clearanceFieldsComplete = !hasExistingClearance &&
+      fillClearanceFormFromAppointment(appointment, appointment.id);
+    showToast(clearanceFieldsComplete
+      ? "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً."
+      : "تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.");
   } catch (error) {
     showToast(error.message, true);
   } finally {
