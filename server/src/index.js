@@ -30,6 +30,7 @@ app.post("/api/trips", requireAuth, requireAdmin, express.json({ limit: MAX_ATTA
 app.post("/api/trip-expenses", requireAuth, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
 app.post("/api/fasah/appointments/preview", requireAuth, requireAdmin, express.json({ limit: "8mb" }));
 app.post("/api/fasah/appointments", requireAuth, requireAdmin, express.json({ limit: MAX_ATTACHMENT_REQUEST_SIZE }));
+app.post("/api/trips/document-reference/preview", requireAuth, requireAdmin, express.json({ limit: "8mb" }));
 app.post("/api/drivers/import", requireAuth, requireAdmin, express.json({ limit: "5mb" }));
 app.post("/api/trucks/import", requireAuth, requireAdmin, express.json({ limit: "5mb" }));
 app.use(express.json({ limit: "256kb" }));

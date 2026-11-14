@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10263f">
-  <title>عالم الشمال | إدارة النقل والحاويات</title>
+  <title>عَالَمُ الشَّمَالِ | إدارة النقل والحاويات</title>
   <link rel="icon" type="image/jpeg" href="assets/north-world-logo.jpeg">
   <link rel="stylesheet" href="styles.css">
   <script defer src="app.js"></script>
@@ -13,9 +13,9 @@
   <section id="auth-screen" class="auth-screen">
     <div class="auth-card">
       <button class="language-toggle" type="button" data-language-toggle>English</button>
-      <a class="brand auth-brand" href="#" aria-label="عالم الشمال">
-        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال">
-        <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
+      <a class="brand auth-brand" href="#" aria-label="عَالَمُ الشَّمَالِ">
+        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عَالَمُ الشَّمَالِ">
+        <span><strong>عَالَمُ الشَّمَالِ</strong><small>إدارة النقل والحاويات</small></span>
       </a>
       <div id="auth-setup-panel" class="auth-panel hidden">
         <span class="eyebrow">الإعداد الأول</span>
@@ -45,9 +45,9 @@
 
   <div id="admin-app" class="app-shell hidden">
     <aside class="sidebar">
-      <a class="brand" href="#" aria-label="عالم الشمال - الصفحة الرئيسية">
-        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال">
-        <span><strong>عالم الشمال</strong><small>إدارة النقل والحاويات</small></span>
+      <a class="brand" href="#" aria-label="عَالَمُ الشَّمَالِ - الصفحة الرئيسية">
+        <img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عَالَمُ الشَّمَالِ">
+        <span><strong>عَالَمُ الشَّمَالِ</strong><small>إدارة النقل والحاويات</small></span>
       </a>
       <div class="sidebar-label">القائمة الرئيسية</div>
       <nav class="navigation" aria-label="القائمة الرئيسية">
@@ -75,7 +75,7 @@
 
     <div class="workspace">
       <header class="topbar">
-        <div class="mobile-brand"><img class="mobile-brand-logo" src="assets/north-world-logo.jpeg" alt=""><strong>عالم الشمال</strong></div>
+        <div class="mobile-brand"><img class="mobile-brand-logo" src="assets/north-world-logo.jpeg" alt=""><strong>عَالَمُ الشَّمَالِ</strong></div>
         <div class="breadcrumb"><span>الرئيسية</span><b>/</b><strong id="page-title">لوحة التحكم</strong></div>
         <div class="topbar-tools">
           <div class="service-health" aria-label="حالة الربط">
@@ -224,13 +224,13 @@
                 <label class="field">وجهة التسليم<input id="issue-destination" required placeholder="المدينة أو المستودع"></label>
                 <label class="field">موعد إعادة الحاوية الفارغة<input id="issue-return-date" type="date"></label>
               </div>
-              <div class="form-section-title section-spaced"><span class="step-number">٣</span><div><h2>مرجع وثيقة النقل</h2><p>اختياري — أدخل الرقم والتاريخ من الوثيقة الصادرة خارج النظام</p></div></div>
+              <div class="form-section-title section-spaced"><span class="step-number">٣</span><div><h2>مرجع وثيقة النقل</h2><p>اختياري — يُستخرج الرقم والتاريخ تلقائياً من PDF المرفق ويمكن تعديله</p></div></div>
               <div class="form-grid">
                 <label class="field">رقم وثيقة النقل<input id="issue-manual-document-number" maxlength="80"></label>
                 <label class="field">تاريخ الوثيقة<input id="issue-manual-document-date" type="date"></label>
-                <label class="field full-field">مستندات وثيقة النقل (PDF أو JPG أو PNG)<input id="transport-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small></label>
+                <label class="field full-field">مستندات وثيقة النقل (PDF أو JPG أو PNG)<input id="transport-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB (الملف الواحد حتى 5 MB).</small><small id="transport-document-extraction-status" class="file-hint hidden" role="status"></small></label>
               </div>
-              <div class="form-actions"><span class="form-note">الرقم المدخل يُحفظ كمرجع يدوي ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.</span><button class="button button-primary" type="submit"><span>＋</span> حفظ الرحلة</button></div>
+              <div class="form-actions"><span class="form-note">المرجع المستخرج أو المدخل يُحفظ ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.</span><button class="button button-primary" type="submit"><span>＋</span> حفظ الرحلة</button></div>
             </form>
             <aside class="panel issue-aside"><div class="aside-icon">▤</div><h3>قبل حفظ الرحلة</h3><ul><li>تأكد من أن حالة الفسح المدخلة «مفسوح».</li><li>اختر شاحنة متاحة وسائقاً نشطاً.</li><li>أدخل بيانات العميل ووجهة التسليم بدقة.</li></ul><div class="aside-warning"><strong>تنويه</strong><p>إدخال رقم الوثيقة يدوي ولا يثبت صحته؛ لا يتم حالياً إصدار أو تنزيل PDF حكومي من النظام.</p></div></aside>
           </div>
@@ -307,13 +307,13 @@
           </div>
         </section>
       </main>
-      <footer class="footer"><span>عالم الشمال لإدارة النقل</span><span>تشغيل مركزي عبر خادم الشركة</span></footer>
+      <footer class="footer"><span>عَالَمُ الشَّمَالِ لإدارة النقل</span><span>تشغيل مركزي عبر خادم الشركة</span></footer>
     </div>
   </div>
 
   <div id="driver-app" class="driver-app hidden">
     <header class="driver-topbar">
-      <a class="brand" href="#" aria-label="عالم الشمال"><img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عالم الشمال"><span><strong>عالم الشمال</strong><small>بوابة السائق</small></span></a>
+      <a class="brand" href="#" aria-label="عَالَمُ الشَّمَالِ"><img class="brand-logo" src="assets/north-world-logo.jpeg" alt="شعار عَالَمُ الشَّمَالِ"><span><strong>عَالَمُ الشَّمَالِ</strong><small>بوابة السائق</small></span></a>
       <div class="driver-session"><span class="driver-avatar">س</span><span><strong id="driver-user-name"></strong><small id="driver-display-name"></small></span><button class="language-toggle" type="button" data-language-toggle>English</button><button id="driver-logout" class="logout-button" type="button">تسجيل الخروج</button></div>
     </header>
     <main class="driver-content">

@@ -16,6 +16,7 @@ import {
 } from "../utils/manual-input.js";
 import { resolveSoftDeletedRecord } from "../utils/soft-delete.js";
 import { extractFasahAppointmentPdf } from "../utils/fasah-appointment.js";
+import { extractTransportDocumentReferencePdf } from "../utils/transport-document-reference.js";
 import { hashPassword } from "../utils/password.js";
 
 const router = Router();
@@ -1302,6 +1303,22 @@ router.patch("/accounts/:id", requireAdmin, async (req, res) => {
     return updated;
   });
   res.json({ ...account, createdAt: account.createdAt.toISOString() });
+});
+
+router.post("/trips/document-reference/preview", requireAdmin, async (req, res) => {
+  const input = z.object({
+    fileName: z.string().trim().min(1).max(255).regex(/\.pdf$/i),
+    data: z.string().min(1)
+  }).safeParse(req.body);
+  if (!input.success) return res.status(400).json({ error: "invalid_transport_document_pdf" });
+
+  const [file] = parseManualAttachments([{
+    name: input.data.fileName,
+    type: "application/pdf",
+    data: input.data.data
+  }]);
+  const reference = await extractTransportDocumentReferencePdf(file.data);
+  res.json(reference);
 });
 
 router.post("/trips", requireAdmin, async (req, res) => {

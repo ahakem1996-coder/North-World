@@ -1,9 +1,9 @@
 const LANGUAGE_KEY = "masar-transport-language";
 const TRANSLATIONS = Object.freeze({
-  "عالم الشمال لإدارة النقل": "North World Transport Management",
-  "عالم الشمال | إدارة النقل والحاويات": "North World | Transport & Container Management",
-  "عالم الشمال - الصفحة الرئيسية": "North World - Home",
-  "عالم الشمال": "North World",
+  "عَالَمُ الشَّمَالِ لإدارة النقل": "North World Transport Management",
+  "عَالَمُ الشَّمَالِ | إدارة النقل والحاويات": "North World | Transport & Container Management",
+  "عَالَمُ الشَّمَالِ - الصفحة الرئيسية": "North World - Home",
+  "عَالَمُ الشَّمَالِ": "North World",
   "إدارة النقل والحاويات": "Transport & Container Management",
   "إدارة النقل": "Transport Management",
   "إدارة العمليات": "Operations Management",
@@ -101,7 +101,11 @@ const TRANSLATIONS = Object.freeze({
   "اختر حالة الفسح": "Select clearance status",
   "استخدام بيانات الموعد للرحلة": "Use Appointment for Trip",
   "رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.": "The ticket phone does not match exactly one active driver with an account.",
+  "رقم الجوال في موعد الفسح لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.": "The appointment phone does not match exactly one active driver with an account.",
   "تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.": "The driver matched, but no available truck is assigned to them.",
+  "تم اختيار السائق تلقائياً بناءً على رقم الجوال في موعد الفسح.": "The driver was selected automatically using the phone number on the Fasah appointment.",
+  "لم يُعثر على موعد فسح مطابق للبيان والحاوية. اختر السائق يدوياً.": "No Fasah appointment matched this declaration and container. Select the driver manually.",
+  "موعد الفسح المطابق لا يحتوي على رقم جوال السائق. اختر السائق يدوياً.": "The matching Fasah appointment has no driver phone number. Select the driver manually.",
   "الحاوية مرتبطة ببيان جمركي مختلف عن بيانات الموعد.": "This container is linked to a different customs declaration than the appointment.",
   "الحاوية مسجلة لكن حالة الفسح ليست مفسوحة، لذلك لا يمكن إصدار طلب رحلة.": "The container is registered but not cleared, so a trip request cannot be issued.",
   "تعذر العثور على موعد فسح محفوظ.": "Could not find a saved Fasah appointment.",
@@ -308,10 +312,15 @@ const TRANSLATIONS = Object.freeze({
   "سجّل الرحلة ورقم وثيقة النقل الصادر خارجياً إن توفر.": "Record the trip and an externally issued transport document number if available.",
   "اختر بياناً مفسوحاً مدخلاً يدوياً": "Select a manually entered cleared declaration",
   "مرجع وثيقة النقل": "Transport Document Reference",
-  "اختياري — أدخل الرقم والتاريخ من الوثيقة الصادرة خارج النظام": "Optional — enter the number and date from a document issued outside this system",
+  "اختياري — يُستخرج الرقم والتاريخ تلقائياً من PDF المرفق ويمكن تعديله": "Optional — the number and date are extracted automatically from the attached PDF and can be edited",
   "رقم وثيقة النقل": "Transport Document Number",
   "تاريخ الوثيقة": "Document Date",
-  "الرقم المدخل يُحفظ كمرجع يدوي ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.": "The number is stored as a manual reference; this system did not issue or verify the document.",
+  "المرجع المستخرج أو المدخل يُحفظ ولا يعني أن النظام أصدر الوثيقة أو تحقق منها.": "The extracted or entered reference is saved; this system did not issue or verify the document.",
+  "جارٍ قراءة مستند النقل واستخراج المرجع...": "Reading the transport document and extracting its reference...",
+  "تم استخراج رقم الوثيقة وتاريخها من PDF. راجعهما قبل الحفظ.": "The document number and date were extracted from the PDF. Review them before saving.",
+  "تم استخراج جزء من مرجع الوثيقة. أكمل الخانة الناقصة يدوياً.": "Part of the document reference was extracted. Fill in the missing field manually.",
+  "لم يتم العثور على رقم الوثيقة أو تاريخها في ملفات PDF. أدخلهما يدوياً.": "No document number or date was found in the PDFs. Enter them manually.",
+  "انتظر انتهاء قراءة PDF قبل حفظ الرحلة.": "Wait for the PDF to finish processing before saving the trip.",
   "حفظ الرحلة": "Save Trip",
   "قبل حفظ الرحلة": "Before Saving the Trip",
   "تأكد من أن حالة الفسح المدخلة «مفسوح».": "Make sure the manually entered clearance status is “Cleared”.",
@@ -319,7 +328,7 @@ const TRANSLATIONS = Object.freeze({
   "مدخل يدوياً": "Manually Entered",
   "بيانات وثيقة مدخلة يدوياً": "Document details entered manually",
   "تم حفظ بيانات الفسح اليدوية. لم يتم التحقق منها لدى منصة فسح.": "Manual clearance details saved. They were not verified with Fasah.",
-  "تم حفظ الرحلة ورقم الوثيقة المدخل يدوياً؛ لم يصدر النظام الوثيقة.": "Trip and manually entered document number saved; this system did not issue the document.",
+  "تم حفظ الرحلة ومرجع وثيقة النقل؛ لم يصدر النظام الوثيقة.": "Trip and transport document reference saved; this system did not issue the document.",
   "تم إنشاء طلب الرحلة بدون رقم وثيقة.": "Trip request created without a document number.",
   "رقم البيان أو الحاوية مسجل مسبقاً.": "This declaration or container is already registered.",
   "بيانات الحاوية المسجلة لا تطابق المقاس أو النوع المدخل.": "The registered container size or type does not match the entered details.",
@@ -849,6 +858,10 @@ let activeDriverTab = "requests";
 let trackingLastUpdatedAt = null;
 let trackingRefreshInFlight = false;
 let editingClearanceId = null;
+let issueDriverMatchSequence = 0;
+let autoMatchedIssueSelection = null;
+let transportReferenceExtractionSequence = 0;
+let transportReferenceExtractionInFlight = false;
 const selectedTruckIds = new Set();
 const selectedDriverIds = new Set();
 
@@ -862,7 +875,7 @@ function translateText(value) {
 function localizeDocument() {
   document.documentElement.lang = language;
   document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
-  document.title = translateText("عالم الشمال | إدارة النقل والحاويات");
+  document.title = translateText("عَالَمُ الشَّمَالِ | إدارة النقل والحاويات");
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walker.nextNode())) {
@@ -982,6 +995,9 @@ const API_ERRORS = {
   driver_only: "هذه الخدمة متاحة لحسابات السائقين فقط.",
   invalid_excel_file: "تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx.",
   invalid_fasah_pdf: "تعذر قراءة الملف. ارفع تذكرة فسح بصيغة PDF ولا يتجاوز حجمها 5 MB.",
+  invalid_transport_document_pdf: "تعذر قراءة ملف PDF لمستند النقل.",
+  transport_document_pdf_text_unavailable: "لا يحتوي PDF على نص قابل للقراءة. قد يكون ممسوحاً ضوئياً.",
+  transport_document_pdf_page_limit: "يتجاوز PDF الحد الأقصى البالغ 20 صفحة للاستخراج.",
   unsupported_fasah_pdf: "الملف ليس تذكرة موعد فسح بالتنسيق المدعوم.",
   fasah_pdf_text_unavailable: "تعذر استخراج النص من الملف. استخدم PDF نصياً غير ممسوح ضوئياً.",
   fasah_pdf_page_limit: "الحد الأقصى لتذكرة الموعد هو 5 صفحات.",
@@ -1591,7 +1607,9 @@ function updateClearanceConfirmation() {
 }
 
 function normalizePhoneNumber(value) {
-  const digits = String(value || "").replace(/\D/g, "");
+  const digits = String(value || "")
+    .replace(/[٠-٩۰-۹]/g, digit => String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(digit) % 10))
+    .replace(/\D/g, "");
   if (digits.startsWith("00966")) return `0${digits.slice(5)}`;
   if (digits.startsWith("966")) return `0${digits.slice(3)}`;
   if (digits.length === 9 && digits.startsWith("5")) return `0${digits}`;
@@ -1609,10 +1627,17 @@ function matchIssueDriverFromAppointment(appointment) {
 
   $("#issue-driver").value = matches[0].id;
   syncIssueTruckDriver("driver", false);
+  autoMatchedIssueSelection = {
+    clearanceId: $("#issue-clearance").value,
+    driverId: matches[0].id,
+    truckId: $("#issue-truck").value
+  };
   return $("#issue-truck").value ? "matched" : "no_available_truck";
 }
 
 function resetAppointmentIssueContext() {
+  issueDriverMatchSequence += 1;
+  autoMatchedIssueSelection = null;
   $("#issue-truck").value = "";
   $("#issue-driver").value = "";
   $("#issue-customer").value = "";
@@ -1726,6 +1751,80 @@ function hasActiveDriverAccount(driverId) {
   );
 }
 
+function appointmentMatchesClearance(appointment, clearance) {
+  const declarationNumber = clearance.declarationNumber.trim().toLocaleUpperCase("en");
+  const containerNumber = normalizeContainerNumber(clearance.containerNumber);
+  return [
+    [appointment.entryDeclarationNumber, appointment.entryContainerNumber],
+    [appointment.exitDeclarationNumber, appointment.exitContainerNumber]
+  ].some(([appointmentDeclaration, appointmentContainer]) =>
+    String(appointmentDeclaration || "").trim().toLocaleUpperCase("en") === declarationNumber &&
+    normalizeContainerNumber(appointmentContainer) === containerNumber
+  );
+}
+
+function clearAutoMatchedIssueSelection() {
+  if (!autoMatchedIssueSelection) return;
+  if ($("#issue-driver").value === autoMatchedIssueSelection.driverId) {
+    $("#issue-driver").value = "";
+  }
+  if (autoMatchedIssueSelection.truckId &&
+      $("#issue-truck").value === autoMatchedIssueSelection.truckId) {
+    $("#issue-truck").value = "";
+  }
+  autoMatchedIssueSelection = null;
+  renderSelectedDriverContact();
+}
+
+async function matchIssueDriverToSelectedClearance() {
+  const clearanceId = $("#issue-clearance").value;
+  const requestId = ++issueDriverMatchSequence;
+  clearAutoMatchedIssueSelection();
+  if (!clearanceId) return;
+  const clearance = clearanceById(clearanceId);
+  if (!clearance) return;
+
+  let appointments = (state.fasahAppointments || [])
+    .filter(appointment => appointmentMatchesClearance(appointment, clearance));
+  if (!appointments.length) {
+    try {
+      const queries = [...new Set([clearance.declarationNumber, clearance.containerNumber].filter(Boolean))];
+      const results = await Promise.all(queries.map(query =>
+        apiRequest(`/api/fasah/lookup?q=${encodeURIComponent(query)}`)
+      ));
+      appointments = results.flatMap(result => result.appointments || [])
+        .filter(appointment => appointmentMatchesClearance(appointment, clearance));
+    } catch (error) {
+      if (requestId === issueDriverMatchSequence && $("#issue-clearance").value === clearanceId) {
+        showToast(error.message, true);
+      }
+      return;
+    }
+  }
+  if (requestId !== issueDriverMatchSequence || $("#issue-clearance").value !== clearanceId) return;
+  if (!appointments.length) {
+    showToast("لم يُعثر على موعد فسح مطابق للبيان والحاوية. اختر السائق يدوياً.");
+    return;
+  }
+
+  appointments.sort((first, second) =>
+    (Date.parse(second.createdAt) || 0) - (Date.parse(first.createdAt) || 0)
+  );
+  const appointment = appointments[0];
+  if (!normalizePhoneNumber(appointment.driverMobileNumber)) {
+    showToast("موعد الفسح المطابق لا يحتوي على رقم جوال السائق. اختر السائق يدوياً.");
+    return;
+  }
+  const result = matchIssueDriverFromAppointment(appointment);
+  if (result === "matched") {
+    showToast("تم اختيار السائق تلقائياً بناءً على رقم الجوال في موعد الفسح.");
+  } else if (result === "no_available_truck") {
+    showToast("تمت مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.", true);
+  } else {
+    showToast("رقم الجوال في موعد الفسح لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
+  }
+}
+
 function populateIssueOptions(selectedId = "") {
   const clearanceSelect = $("#issue-clearance");
   const truckSelect = $("#issue-truck");
@@ -1771,6 +1870,10 @@ function renderSelectedDriverContact() {
 function syncIssueTruckDriver(source, notify = true) {
   const truckSelect = $("#issue-truck");
   const driverSelect = $("#issue-driver");
+  if (notify) {
+    issueDriverMatchSequence += 1;
+    autoMatchedIssueSelection = null;
+  }
   const availableTrucks = state.trucks.filter(item => !item.deletedAt && item.status === "AVAILABLE");
 
   if (source === "truck") {
@@ -2523,8 +2626,94 @@ async function advanceDriverTrip(id, eirValue = "") {
   }
 }
 
+async function extractTransportDocumentReference(input) {
+  const requestId = ++transportReferenceExtractionSequence;
+  const status = $("#transport-document-extraction-status");
+  const selectedFiles = Array.from(input.files || []);
+  const pdfFiles = selectedFiles.filter(file =>
+    file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+  );
+  if (!pdfFiles.length) {
+    transportReferenceExtractionInFlight = false;
+    status.classList.add("hidden");
+    status.textContent = "";
+    return;
+  }
+
+  const numberInput = $("#issue-manual-document-number");
+  const dateInput = $("#issue-manual-document-date");
+  const originalNumber = numberInput.value;
+  const originalDate = dateInput.value;
+  transportReferenceExtractionInFlight = true;
+  status.textContent = translateText("جارٍ قراءة مستند النقل واستخراج المرجع...");
+  status.classList.remove("hidden");
+  try {
+    const attachments = await encodeSelectedAttachments(input);
+    if (requestId !== transportReferenceExtractionSequence) return;
+
+    let extractedReference = null;
+    let partialReference = null;
+    let lastError = null;
+    let completedPreview = false;
+    for (const file of attachments.filter(attachment => attachment.type === "application/pdf")) {
+      try {
+        const reference = await apiRequest("/api/trips/document-reference/preview", {
+          method: "POST",
+          body: { fileName: file.name, data: file.data }
+        });
+        completedPreview = true;
+        if (reference.documentNumber && reference.documentDate) {
+          extractedReference = reference;
+          break;
+        }
+        if ((reference.documentNumber || reference.documentDate) && !partialReference) {
+          partialReference = reference;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      if (requestId !== transportReferenceExtractionSequence) return;
+    }
+
+    const reference = extractedReference || partialReference;
+    if (!reference) {
+      const message = lastError && !completedPreview
+        ? lastError.message
+        : "لم يتم العثور على رقم الوثيقة أو تاريخها في ملفات PDF. أدخلهما يدوياً.";
+      status.textContent = translateText(message);
+      showToast(message, true);
+      return;
+    }
+
+    if (reference.documentNumber && numberInput.value === originalNumber) {
+      numberInput.value = reference.documentNumber;
+    }
+    if (reference.documentDate && dateInput.value === originalDate) {
+      dateInput.value = reference.documentDate;
+    }
+
+    const complete = Boolean(reference.documentNumber && reference.documentDate);
+    const message = complete
+      ? "تم استخراج رقم الوثيقة وتاريخها من PDF. راجعهما قبل الحفظ."
+      : "تم استخراج جزء من مرجع الوثيقة. أكمل الخانة الناقصة يدوياً.";
+    status.textContent = translateText(message);
+    showToast(message, !complete);
+  } catch (error) {
+    if (requestId !== transportReferenceExtractionSequence) return;
+    status.textContent = translateText(error.message);
+    showToast(error.message, true);
+  } finally {
+    if (requestId === transportReferenceExtractionSequence) {
+      transportReferenceExtractionInFlight = false;
+    }
+  }
+}
+
 async function issueDocument(event) {
   event.preventDefault();
+  if (transportReferenceExtractionInFlight) {
+    return showToast("انتظر انتهاء قراءة PDF قبل حفظ الرحلة.", true);
+  }
   const clearance = clearanceById($("#issue-clearance").value);
   const truck = truckById($("#issue-truck").value);
   const driver = driverById($("#issue-driver").value);
@@ -2563,7 +2752,7 @@ async function issueDocument(event) {
     $("#selected-clearance").classList.add("hidden");
     await refreshServerState();
     showToast(manualDocumentNumber
-      ? "تم حفظ الرحلة ورقم الوثيقة المدخل يدوياً؛ لم يصدر النظام الوثيقة."
+      ? "تم حفظ الرحلة ومرجع وثيقة النقل؛ لم يصدر النظام الوثيقة."
       : "تم إنشاء طلب الرحلة بدون رقم وثيقة.");
     switchView("dashboard");
   } catch (error) {
@@ -2631,7 +2820,7 @@ function printDocument(id) {
         <div class="item"><small>موعد إعادة الفارغ</small><strong>${formatDate(doc.returnDueAt)}</strong></div>
       </div>
       <div class="notice">ملخص داخلي للرحلة فقط، ولا يُعد تصريحاً أو وثيقة صادرة من منصة حكومية.</div>
-      <footer><span>عالم الشمال لإدارة النقل</span><span>تاريخ الطباعة: ${formatDate(dateOnly())}</span></footer>
+      <footer><span>عَالَمُ الشَّمَالِ لإدارة النقل</span><span>تاريخ الطباعة: ${formatDate(dateOnly())}</span></footer>
     </main><script>window.onload=function(){window.print()}<\/script></body></html>`;
   content = translateText(content);
   const printWindow = window.open("", "_blank");
@@ -3002,6 +3191,7 @@ function init() {
       switchView("issue");
       $("#issue-clearance").value = action.dataset.id;
       renderSelectedClearance();
+      matchIssueDriverToSelectedClearance();
     }
     if (action.dataset.action === "edit-clearance") beginClearanceEdit(action.dataset.id);
     if (action.dataset.action === "use-fasah-appointment") prepareTripFromFasahAppointment(action.dataset.id);
@@ -3034,9 +3224,15 @@ function init() {
   $("#clearance-fetch-latest-pdf").addEventListener("click", fillClearanceFromLatestPdf);
   $("#clearance-port").addEventListener("input", updateClearancePortCity);
   $("#clearance-status").addEventListener("change", updateClearanceConfirmation);
-  $("#issue-clearance").addEventListener("change", renderSelectedClearance);
+  $("#issue-clearance").addEventListener("change", () => {
+    renderSelectedClearance();
+    matchIssueDriverToSelectedClearance();
+  });
   $("#issue-truck").addEventListener("change", () => syncIssueTruckDriver("truck"));
   $("#issue-driver").addEventListener("change", () => syncIssueTruckDriver("driver"));
+  $("#transport-attachments").addEventListener("change", event =>
+    extractTransportDocumentReference(event.currentTarget)
+  );
   $("#issue-form").addEventListener("submit", issueDocument);
   $("#truck-filter").addEventListener("input", renderFleet);
   $("#driver-filter").addEventListener("input", renderDrivers);
