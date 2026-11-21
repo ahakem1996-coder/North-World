@@ -3269,7 +3269,11 @@ function populateDomesticOptions() {
   driverSelect.innerHTML = `<option value="">${translateText("اختر السائق")}</option>` +
     state.drivers
       .filter(driver => !driver.deletedAt && driver.isActive)
-      .map(driver => `<option value="${escapeHtml(driver.id)}">${escapeHtml(driver.name)} (${escapeHtml(driver.phone)})</option>`)
+      .map(driver => {
+        const linkedTruck = state.trucks.find(t => t.driverId === driver.id && !t.deletedAt);
+        const truckInfo = linkedTruck ? ` [شاحنة: ${linkedTruck.plateNumber}]` : "";
+        return `<option value="${escapeHtml(driver.id)}">${escapeHtml(driver.name)}${truckInfo} (${escapeHtml(driver.phone)})</option>`;
+      })
       .join("");
 
   if (currentTruck) truckSelect.value = currentTruck;
@@ -3283,9 +3287,23 @@ function populateDomesticOptions() {
 function syncDomesticTruckDriver(source) {
   if (source === "driver") {
     const driverId = $("#domestic-driver")?.value;
-    if (!driverId) return;
-    const truck = state.trucks.find(t => t.driverId === driverId && t.status === "AVAILABLE" && !t.deletedAt);
-    if (truck && $("#domestic-truck")) $("#domestic-truck").value = truck.id;
+    if (!driverId) {
+      if ($("#domestic-truck")) $("#domestic-truck").value = "";
+      return;
+    }
+    const truck = state.trucks.find(t => t.driverId === driverId && !t.deletedAt);
+    if (truck && $("#domestic-truck")) {
+      let opt = $("#domestic-truck").querySelector(`option[value="${truck.id}"]`);
+      if (!opt) {
+        opt = document.createElement("option");
+        opt.value = truck.id;
+        opt.textContent = `${truck.plateNumber} — ${truck.fleetNumber}`;
+        $("#domestic-truck").appendChild(opt);
+      }
+      $("#domestic-truck").value = truck.id;
+    } else {
+      showToast("تنبيه: هذا السائق غير مرتبط بشاحنة في سجل الأسطول، يرجى اختيار الشاحنة يدوياً.", false);
+    }
   } else if (source === "truck") {
     const truckId = $("#domestic-truck")?.value;
     if (!truckId) return;
@@ -3351,20 +3369,24 @@ async function handleDomesticTripSubmit(event) {
   const customerName = $("#domestic-customer")?.value.trim();
   const origin = $("#domestic-origin")?.value.trim();
   const destination = $("#domestic-destination")?.value.trim();
-  const driverId = $("#domestic-driver")?.value;
-  const truckId = $("#domestic-truck")?.value;
   const manualDocumentDate = $("#domestic-doc-date")?.value || dateOnly();
-  const clientRate = $("#domestic-client-rate")?.value.trim() || "";
-  const driverFee = $("#domestic-driver-fee")?.value.trim() || "";
-  const cargoDescription = $("#domestic-cargo")?.value.trim() || "";
-  const cargoWaybillNumber = $("#domestic-waybill")?.value.trim() || "";
-  const manualDocumentNumber = $("#domestic-doc-number")?.value.trim() || "";
+  const driverId = $("#domestic-driver")?.value;
+  let truckId = $("#domestic-truck")?.value;
 
   if (!customerName || !origin || !destination) {
     return showToast("أكمل اسم الشركة وموقعي التحميل والتسليم.", true);
   }
-  if (!truckId) return showToast("اختر شاحنة متاحة.", true);
-  if (!driverId) return showToast("اختر سائقاً نشطاً.", true);
+  if (!driverId) return showToast("اختر السائق المكلف.", true);
+
+  if (!truckId) {
+    const linkedTruck = state.trucks.find(t => t.driverId === driverId && !t.deletedAt);
+    if (linkedTruck) {
+      truckId = linkedTruck.id;
+      if ($("#domestic-truck")) $("#domestic-truck").value = truckId;
+    } else {
+      return showToast("السائق غير مرتبط بشاحنة في سجل الأسطول، يرجى اختيار الشاحنة.", true);
+    }
+  }
 
   const driver = driverById(driverId);
   if (!driver || !driver.isActive) return showToast("اختر سائقاً نشطاً.", true);
@@ -3372,8 +3394,11 @@ async function handleDomesticTripSubmit(event) {
     return showToast("أنشئ حساباً للسائق المحدد قبل تعيين رحلة له.", true);
   }
 
+  const tariff = findMatchingTariff(customerName, origin, destination);
+  const clientRate = tariff ? String(tariff.price) : "";
+  const driverFee = tariff && tariff.driverCost ? String(tariff.driverCost) : "";
+
   try {
-    const attachments = await encodeSelectedAttachments($("#domestic-attachments"));
     await apiRequest("/api/trips/domestic", {
       method: "POST",
       body: {
@@ -3384,11 +3409,11 @@ async function handleDomesticTripSubmit(event) {
         driverId,
         clientRate,
         driverFee,
-        cargoDescription,
-        cargoWaybillNumber,
-        manualDocumentNumber,
+        cargoDescription: "بضائع عامة",
+        cargoWaybillNumber: "",
+        manualDocumentNumber: "",
         manualDocumentDate,
-        attachments
+        attachments: []
       }
     });
 
