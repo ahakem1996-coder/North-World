@@ -73,7 +73,8 @@ const tripInclude = {
   container: true,
   customsClearance: { include: { attachments: { select: attachmentMetadataSelect } } },
   transportDocument: { include: { attachments: { select: attachmentMetadataSelect } } },
-  stageUpdates: { orderBy: { completedAt: "asc" } }
+  stageUpdates: { orderBy: { completedAt: "asc" } },
+  invoice: { select: { id: true, invoiceNumber: true, status: true } }
 };
 const tripExpenseInclude = {
   attachments: { select: attachmentMetadataSelect },
@@ -243,42 +244,53 @@ function mapFasahAppointment(appointment) {
 function mapTrip(trip) {
   const completed = Boolean(trip.emptyReturnedAt);
   const stageIndex = trip.currentStage ? tripStages.indexOf(trip.currentStage) : -1;
+  const isDomestic = trip.tripType === "DOMESTIC";
   return {
     id: trip.transportDocument?.id || trip.id,
     tripId: trip.id,
-    documentNumber: trip.transportDocument?.documentNumber || null,
+    tripType: trip.tripType || "PORT",
+    documentNumber: trip.transportDocument?.documentNumber || trip.cargoWaybillNumber || null,
     status: trip.transportDocument?.status || "DRAFT",
     source: trip.transportDocument?.source || "INTERNAL_DRAFT",
     issuedAt: trip.transportDocument?.issuedAt?.toISOString().slice(0, 10) ||
       trip.operationAt.toISOString().slice(0, 10),
-    clearanceId: trip.customsClearanceId,
-    declarationNumber: trip.customsClearance.declarationNumber,
-    containerNumber: trip.container.containerNumber,
-    size: trip.container.size === "FT_20" ? "20 قدم" : "40 قدم",
-    type: trip.container.type,
-    sealNumber: trip.customsClearance.shippingSealNumber,
-    vesselName: trip.customsClearance.vesselName,
-    port: trip.port.name,
-    customerName: trip.customer.name,
+    clearanceId: trip.customsClearanceId || null,
+    declarationNumber: trip.customsClearance?.declarationNumber || (isDomestic ? "نقل خارجي" : null),
+    containerNumber: trip.container?.containerNumber || trip.cargoDescription || (isDomestic ? "نقل داخلي" : null),
+    size: trip.container?.size ? (trip.container.size === "FT_20" ? "20 قدم" : "40 قدم") : (trip.cargoDescription || "بضائع عامة"),
+    type: trip.container?.type || "DOMESTIC",
+    sealNumber: trip.customsClearance?.shippingSealNumber || null,
+    vesselName: trip.customsClearance?.vesselName || null,
+    port: trip.port?.name || trip.originLocation || "الموقع الميداني",
+    origin: trip.originLocation || trip.port?.name || "الميناء",
+    destination: trip.deliveryDestination,
+    cargoDescription: trip.cargoDescription || null,
+    cargoWaybillNumber: trip.cargoWaybillNumber || null,
+    clientRate: trip.clientRate ? trip.clientRate.toString() : null,
+    driverFee: trip.driverFee ? trip.driverFee.toString() : null,
+    billingStatus: trip.billingStatus || "UNBILLED",
+    invoiceId: trip.invoiceId || null,
+    invoiceNumber: trip.invoice?.invoiceNumber || null,
+    customerName: trip.customer?.name || "",
+    customerId: trip.customerId,
     truckId: trip.truckId || "",
     truckFleetNumber: trip.truckFleetNumber,
     truckPlateNumber: trip.truckPlateNumber,
     truckSerialNumber: trip.truckSerialNumber,
     truckModel: trip.truckModel,
     driverId: trip.driverId,
-    destination: trip.deliveryDestination,
     returnDueAt: trip.emptyReturnDueAt?.toISOString().slice(0, 10) || "",
     freeTimeEndsAt: trip.freeTimeEndsAt?.toISOString().slice(0, 10) || "",
     requestStatus: trip.driverAcceptedAt ? "ACCEPTED" : "PENDING",
     acceptedAt: trip.driverAcceptedAt?.toISOString() || "",
     tripStageIndex: completed ? tripStages.length - 1 : trip.driverAcceptedAt ? Math.max(0, stageIndex) : -1,
-    stageHistory: trip.stageUpdates.map(update => ({
+    stageHistory: (trip.stageUpdates || []).map(update => ({
       stage: update.stage,
       completedAt: update.completedAt.toISOString()
     })),
     returnedAt: trip.emptyReturnedAt?.toISOString().slice(0, 10) || "",
     eir: trip.eirReceiptNumber || "",
-    clearanceAttachments: (trip.customsClearance.attachments || []).map(attachmentMetadata),
+    clearanceAttachments: (trip.customsClearance?.attachments || []).map(attachmentMetadata),
     attachments: (trip.transportDocument?.attachments || []).map(attachmentMetadata)
   };
 }
@@ -293,12 +305,48 @@ function mapTripExpense(expense) {
     createdAt: expense.createdAt.toISOString(),
     attachments: (expense.attachments || []).map(attachmentMetadata),
     driverId: expense.trip.driverId,
-    driverName: expense.trip.driver.name,
-    nationalId: expense.trip.driver.nationalId,
+    driverName: expense.trip.driver?.name || "",
+    nationalId: expense.trip.driver?.nationalId || "",
     plateNumber: expense.trip.truck?.plateNumber || expense.trip.truckPlateNumber,
-    containerNumber: expense.trip.container.containerNumber,
-    declarationNumber: expense.trip.customsClearance.declarationNumber,
+    containerNumber: expense.trip.container?.containerNumber || expense.trip.cargoDescription || null,
+    declarationNumber: expense.trip.customsClearance?.declarationNumber || "نقل خارجي",
     documentNumber: expense.trip.transportDocument?.documentNumber || null
+  };
+}
+
+function mapTariff(rate) {
+  return {
+    id: rate.id,
+    customerId: rate.customerId,
+    customerName: rate.customer?.name || "",
+    origin: rate.origin,
+    destination: rate.destination,
+    cargoType: rate.cargoType || "",
+    price: rate.price.toString(),
+    driverCost: rate.driverCost ? rate.driverCost.toString() : "",
+    notes: rate.notes || "",
+    createdAt: rate.createdAt.toISOString()
+  };
+}
+
+function mapInvoice(inv) {
+  return {
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    customerId: inv.customerId,
+    customerName: inv.customer?.name || "",
+    customerTaxNumber: inv.customer?.taxNumber || "",
+    issueDate: inv.issueDate.toISOString().slice(0, 10),
+    dueDate: inv.dueDate ? inv.dueDate.toISOString().slice(0, 10) : "",
+    status: inv.status,
+    subtotal: inv.subtotal.toString(),
+    taxRate: inv.taxRate.toString(),
+    taxAmount: inv.taxAmount.toString(),
+    totalAmount: inv.totalAmount.toString(),
+    notes: inv.notes || "",
+    tripCount: inv.trips ? inv.trips.length : 0,
+    trips: (inv.trips || []).map(mapTrip),
+    createdAt: inv.createdAt.toISOString()
   };
 }
 
@@ -342,7 +390,7 @@ async function writeAudit(tx, req, action, entityType, entityId, metadata) {
 async function getAppState(req) {
   const isDriver = req.user.role === "DRIVER";
   const driverId = isDriver ? req.user.driverId : undefined;
-  const [trucks, drivers, clearances, trips, accounts, ports, tripExpenses, fasahAppointments] = await Promise.all([
+  const [trucks, drivers, clearances, trips, accounts, ports, tripExpenses, fasahAppointments, tariffs, invoices, customers] = await Promise.all([
     prisma.truck.findMany({
       where: isDriver
         ? { trips: { some: { driverId } } }
@@ -386,6 +434,18 @@ async function getAppState(req) {
       include: { attachments: { select: attachmentMetadataSelect } },
       orderBy: { createdAt: "desc" },
       take: 100
+    }),
+    isDriver ? Promise.resolve([]) : prisma.companyRate.findMany({
+      include: { customer: true },
+      orderBy: [{ customer: { name: "asc" } }, { origin: "asc" }]
+    }),
+    isDriver ? Promise.resolve([]) : prisma.invoice.findMany({
+      include: { customer: true, trips: { include: tripInclude } },
+      orderBy: { issueDate: "desc" }
+    }),
+    isDriver ? Promise.resolve([]) : prisma.customer.findMany({
+      select: { id: true, name: true, phone: true, email: true, address: true, taxNumber: true },
+      orderBy: { name: "asc" }
     })
   ]);
   return {
@@ -396,7 +456,10 @@ async function getAppState(req) {
     tripExpenses: tripExpenses.map(mapTripExpense),
     fasahAppointments: fasahAppointments.map(mapFasahAppointment),
     accounts: accounts.map(account => ({ ...account, createdAt: account.createdAt.toISOString() })),
-    ports
+    ports,
+    tariffs: (tariffs || []).map(mapTariff),
+    invoices: (invoices || []).map(mapInvoice),
+    customers: customers || []
   };
 }
 
@@ -1330,6 +1393,8 @@ router.post("/trips", requireAdmin, async (req, res) => {
     customerName: z.string().trim().min(1).max(160),
     destination: z.string().trim().min(1).max(240),
     returnDueAt: z.string().date().optional().or(z.literal("")),
+    clientRate: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
+    driverFee: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
     ...manualDocumentReferenceFields
   }).refine(hasCompleteManualDocumentReference, {
     path: ["manualDocumentDate"],
@@ -1367,7 +1432,12 @@ router.post("/trips", requireAdmin, async (req, res) => {
     });
     const created = await tx.trip.create({
       data: {
+        tripType: "PORT",
+        originLocation: clearance.port.name,
         deliveryDestination: parsed.data.destination,
+        clientRate: parsed.data.clientRate ? Number(parsed.data.clientRate) : null,
+        driverFee: parsed.data.driverFee ? Number(parsed.data.driverFee) : null,
+        billingStatus: "UNBILLED",
         emptyReturnDueAt: parsed.data.returnDueAt ? new Date(`${parsed.data.returnDueAt}T00:00:00.000Z`) : null,
         truckId: truck.id,
         truckFleetNumber: truck.fleetNumber,
@@ -1406,6 +1476,355 @@ router.post("/trips", requireAdmin, async (req, res) => {
     return created;
   }, { isolationLevel: "Serializable" });
   res.status(201).json(mapTrip(trip));
+});
+
+router.post("/trips/domestic", requireAdmin, async (req, res) => {
+  const attachments = parseManualAttachments(req.body?.attachments);
+  const schema = z.object({
+    customerName: z.string().trim().min(1).max(160),
+    origin: z.string().trim().min(1).max(240),
+    destination: z.string().trim().min(1).max(240),
+    truckId: z.string().min(1),
+    driverId: z.string().min(1),
+    cargoDescription: z.string().trim().max(240).optional().default(""),
+    cargoWaybillNumber: z.string().trim().max(80).optional().default(""),
+    clientRate: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
+    driverFee: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
+    manualDocumentNumber: z.string().trim().max(80).optional().default(""),
+    manualDocumentDate: z.string().date().optional().or(z.literal(""))
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_domestic_trip_input" });
+
+  const trip = await prisma.$transaction(async tx => {
+    const truck = await tx.truck.findFirst({
+      where: { id: parsed.data.truckId, status: "AVAILABLE", deletedAt: null }
+    });
+    if (!truck) throw Object.assign(new Error("truck_unavailable"), { statusCode: 409, publicCode: "truck_unavailable" });
+
+    const driver = await tx.driver.findFirst({
+      where: {
+        id: parsed.data.driverId,
+        isActive: true,
+        deletedAt: null,
+        user: { is: { role: "DRIVER", isActive: true, deletedAt: null } }
+      }
+    });
+    if (!driver) throw Object.assign(new Error("driver_account_required"), { statusCode: 409, publicCode: "driver_account_required" });
+
+    const customer = await tx.customer.upsert({
+      where: { name: parsed.data.customerName },
+      create: { name: parsed.data.customerName },
+      update: {}
+    });
+
+    const docNumber = parsed.data.manualDocumentNumber || parsed.data.cargoWaybillNumber || null;
+
+    const created = await tx.trip.create({
+      data: {
+        tripType: "DOMESTIC",
+        originLocation: parsed.data.origin,
+        deliveryDestination: parsed.data.destination,
+        cargoDescription: parsed.data.cargoDescription || null,
+        cargoWaybillNumber: parsed.data.cargoWaybillNumber || null,
+        clientRate: parsed.data.clientRate ? Number(parsed.data.clientRate) : null,
+        driverFee: parsed.data.driverFee ? Number(parsed.data.driverFee) : null,
+        billingStatus: "UNBILLED",
+        truckId: truck.id,
+        truckFleetNumber: truck.fleetNumber,
+        truckPlateNumber: truck.plateNumber,
+        truckSerialNumber: truck.serialNumber,
+        truckModel: truck.model,
+        driverId: driver.id,
+        customerId: customer.id,
+        transportDocument: (docNumber || attachments.length) ? {
+          create: {
+            documentNumber: docNumber,
+            status: docNumber ? "ISSUED" : "DRAFT",
+            source: docNumber ? "MANUAL_ENTRY" : "INTERNAL_DRAFT",
+            issuedAt: parsed.data.manualDocumentDate
+              ? new Date(`${parsed.data.manualDocumentDate}T00:00:00.000Z`)
+              : new Date(),
+            ...(attachments.length ? {
+              attachments: { create: attachments }
+            } : {})
+          }
+        } : undefined
+      },
+      include: tripInclude
+    });
+
+    await tx.truck.update({
+      where: { id: truck.id },
+      data: { status: "ASSIGNED", assignedDriverId: driver.id }
+    });
+
+    await writeAudit(tx, req, "trip.domestic_created", "Trip", created.id, {
+      customerName: customer.name,
+      attachmentCount: attachments.length
+    });
+
+    return created;
+  }, { isolationLevel: "Serializable" });
+
+  res.status(201).json(mapTrip(trip));
+});
+
+router.get("/tariffs", requireAdmin, async (req, res) => {
+  const customerId = req.query.customerId ? String(req.query.customerId) : undefined;
+  const tariffs = await prisma.companyRate.findMany({
+    where: customerId ? { customerId } : {},
+    include: { customer: true },
+    orderBy: [{ customer: { name: "asc" } }, { origin: "asc" }]
+  });
+  res.json(tariffs.map(mapTariff));
+});
+
+router.post("/tariffs", requireAdmin, async (req, res) => {
+  const schema = z.object({
+    customerName: z.string().trim().min(1).max(160),
+    origin: z.string().trim().min(1).max(240),
+    destination: z.string().trim().min(1).max(240),
+    cargoType: z.string().trim().max(100).optional().default(""),
+    price: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).refine(v => Number(v) >= 0),
+    driverCost: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
+    notes: z.string().trim().max(500).optional().default("")
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_tariff_input" });
+
+  const customer = await prisma.customer.upsert({
+    where: { name: parsed.data.customerName },
+    create: { name: parsed.data.customerName },
+    update: {}
+  });
+
+  const created = await prisma.companyRate.create({
+    data: {
+      customerId: customer.id,
+      origin: parsed.data.origin,
+      destination: parsed.data.destination,
+      cargoType: parsed.data.cargoType || null,
+      price: Number(parsed.data.price),
+      driverCost: parsed.data.driverCost ? Number(parsed.data.driverCost) : null,
+      notes: parsed.data.notes || null
+    },
+    include: { customer: true }
+  });
+
+  res.status(201).json(mapTariff(created));
+});
+
+router.put("/tariffs/:id", requireAdmin, async (req, res) => {
+  const schema = z.object({
+    origin: z.string().trim().min(1).max(240),
+    destination: z.string().trim().min(1).max(240),
+    cargoType: z.string().trim().max(100).optional().default(""),
+    price: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).refine(v => Number(v) >= 0),
+    driverCost: z.string().trim().regex(/^\d{1,10}(?:\.\d{1,2})?$/).optional().or(z.literal("")),
+    notes: z.string().trim().max(500).optional().default("")
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_tariff_input" });
+
+  const updated = await prisma.companyRate.update({
+    where: { id: req.params.id },
+    data: {
+      origin: parsed.data.origin,
+      destination: parsed.data.destination,
+      cargoType: parsed.data.cargoType || null,
+      price: Number(parsed.data.price),
+      driverCost: parsed.data.driverCost ? Number(parsed.data.driverCost) : null,
+      notes: parsed.data.notes || null
+    },
+    include: { customer: true }
+  });
+
+  res.json(mapTariff(updated));
+});
+
+router.delete("/tariffs/:id", requireAdmin, async (req, res) => {
+  await prisma.companyRate.delete({ where: { id: req.params.id } });
+  res.json({ success: true });
+});
+
+router.get("/tariffs/suggest", requireAdmin, async (req, res) => {
+  const { customerName, origin, destination } = req.query;
+  if (!customerName || !destination) return res.json({ rate: null });
+
+  const rate = await prisma.companyRate.findFirst({
+    where: {
+      customer: { name: { equals: String(customerName).trim(), mode: "insensitive" } },
+      destination: { contains: String(destination).trim(), mode: "insensitive" },
+      ...(origin ? { origin: { contains: String(origin).trim(), mode: "insensitive" } } : {})
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  res.json({
+    rate: rate ? {
+      price: rate.price.toString(),
+      driverCost: rate.driverCost ? rate.driverCost.toString() : "",
+      origin: rate.origin,
+      destination: rate.destination,
+      cargoType: rate.cargoType
+    } : null
+  });
+});
+
+router.get("/invoices", requireAdmin, async (req, res) => {
+  const invoices = await prisma.invoice.findMany({
+    include: {
+      customer: true,
+      trips: { include: tripInclude }
+    },
+    orderBy: { issueDate: "desc" }
+  });
+  res.json(invoices.map(mapInvoice));
+});
+
+router.post("/invoices", requireAdmin, async (req, res) => {
+  const schema = z.object({
+    customerName: z.string().trim().min(1).max(160),
+    tripIds: z.array(z.string().min(1)).min(1),
+    taxRate: z.number().min(0).max(100).default(15),
+    notes: z.string().trim().max(500).optional().default(""),
+    customInvoiceNumber: z.string().trim().max(60).optional()
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_invoice_input" });
+
+  const invoice = await prisma.$transaction(async tx => {
+    const customer = await tx.customer.upsert({
+      where: { name: parsed.data.customerName },
+      create: { name: parsed.data.customerName },
+      update: {}
+    });
+
+    const trips = await tx.trip.findMany({
+      where: {
+        id: { in: parsed.data.tripIds },
+        customerId: customer.id,
+        billingStatus: "UNBILLED"
+      }
+    });
+
+    if (trips.length === 0) {
+      throw Object.assign(new Error("no_eligible_trips"), { statusCode: 400, publicCode: "no_eligible_trips" });
+    }
+
+    const subtotal = trips.reduce((acc, trip) => {
+      return acc + (trip.clientRate ? Number(trip.clientRate) : 0);
+    }, 0);
+
+    const taxRate = parsed.data.taxRate;
+    const taxAmount = Number(((subtotal * taxRate) / 100).toFixed(2));
+    const totalAmount = Number((subtotal + taxAmount).toFixed(2));
+
+    let invoiceNumber = parsed.data.customInvoiceNumber;
+    if (!invoiceNumber) {
+      const count = await tx.invoice.count();
+      const year = new Date().getFullYear();
+      invoiceNumber = `INV-${year}-${String(count + 1).padStart(4, "0")}`;
+    }
+
+    const created = await tx.invoice.create({
+      data: {
+        invoiceNumber,
+        customerId: customer.id,
+        status: "ISSUED",
+        subtotal,
+        taxRate,
+        taxAmount,
+        totalAmount,
+        notes: parsed.data.notes || null,
+        trips: {
+          connect: trips.map(t => ({ id: t.id }))
+        }
+      },
+      include: {
+        customer: true,
+        trips: { include: tripInclude }
+      }
+    });
+
+    await tx.trip.updateMany({
+      where: { id: { in: trips.map(t => t.id) } },
+      data: {
+        billingStatus: "INVOICED",
+        invoiceId: created.id
+      }
+    });
+
+    await writeAudit(tx, req, "invoice.created", "Invoice", created.id, {
+      invoiceNumber,
+      tripCount: trips.length,
+      totalAmount
+    });
+
+    return created;
+  });
+
+  res.status(201).json(mapInvoice(invoice));
+});
+
+router.get("/invoices/:id", requireAdmin, async (req, res) => {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: req.params.id },
+    include: {
+      customer: true,
+      trips: { include: tripInclude }
+    }
+  });
+  if (!invoice) return res.status(404).json({ error: "invoice_not_found" });
+  res.json(mapInvoice(invoice));
+});
+
+router.patch("/invoices/:id/status", requireAdmin, async (req, res) => {
+  const schema = z.object({
+    status: z.enum(["DRAFT", "ISSUED", "PAID", "CANCELLED"])
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_status" });
+
+  const updated = await prisma.$transaction(async tx => {
+    const inv = await tx.invoice.findUnique({
+      where: { id: req.params.id },
+      include: { trips: true }
+    });
+    if (!inv) throw Object.assign(new Error("not_found"), { statusCode: 404 });
+
+    const newStatus = parsed.data.status;
+    const invUpdated = await tx.invoice.update({
+      where: { id: inv.id },
+      data: { status: newStatus },
+      include: {
+        customer: true,
+        trips: { include: tripInclude }
+      }
+    });
+
+    if (newStatus === "PAID") {
+      await tx.trip.updateMany({
+        where: { invoiceId: inv.id },
+        data: { billingStatus: "PAID" }
+      });
+    } else if (newStatus === "CANCELLED") {
+      await tx.trip.updateMany({
+        where: { invoiceId: inv.id },
+        data: { billingStatus: "UNBILLED", invoiceId: null }
+      });
+    } else if (newStatus === "ISSUED" || newStatus === "DRAFT") {
+      await tx.trip.updateMany({
+        where: { invoiceId: inv.id },
+        data: { billingStatus: "INVOICED" }
+      });
+    }
+
+    return invUpdated;
+  });
+
+  res.json(mapInvoice(updated));
 });
 
 router.post("/trip-expenses", async (req, res) => {

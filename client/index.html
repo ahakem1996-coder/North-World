@@ -54,6 +54,9 @@
         <button class="nav-link active" data-view="dashboard"><span class="nav-icon">⌂</span>لوحة التحكم</button>
         <button class="nav-link" data-view="fasah"><span class="nav-icon">⌕</span>استعلام الفسح</button>
         <button class="nav-link" data-view="issue"><span class="nav-icon">▤</span>إصدار وثيقة نقل</button>
+        <button class="nav-link" data-view="domestic"><span class="nav-icon">⇄</span>نقل خارج الميناء</button>
+        <button class="nav-link" data-view="tariffs"><span class="nav-icon">🏷</span>أسعار الشركات</button>
+        <button class="nav-link" data-view="invoices"><span class="nav-icon">🧾</span>الفواتير والحسابات</button>
         <button class="nav-link" data-view="fleet"><span class="nav-icon">▰</span>الأسطول والسائقون</button>
         <button class="nav-link" data-view="tracking"><span class="nav-icon">⌖</span>تتبع الرحلات</button>
         <button class="nav-link" data-view="expenses"><span class="nav-icon">﷼</span>تكاليف الرحلات</button>
@@ -220,9 +223,11 @@
                 <label class="field">الشاحنة<select id="issue-truck" required></select></label>
                 <label class="field">السائق<select id="issue-driver" required></select></label>
                 <div id="issue-driver-contact" class="selected-clearance full-field hidden"></div>
-                <label class="field">الشركة المستلمة<input id="issue-customer" required placeholder="مثال: شركة العميل"></label>
+                <label class="field">الشركة المستلمة<input id="issue-customer" required placeholder="مثال: شركة العميل" list="customer-list"></label>
                 <label class="field">وجهة التسليم<input id="issue-destination" required placeholder="المدينة أو المستودع"></label>
                 <label class="field">موعد إعادة الحاوية الفارغة<input id="issue-return-date" type="date"></label>
+                <label class="field">سعر النقل للشركة (ريال)<input id="issue-client-rate" type="number" step="0.01" min="0" placeholder="0.00"></label>
+                <label class="field">أجر / تكلفة السائق (ريال)<input id="issue-driver-fee" type="number" step="0.01" min="0" placeholder="0.00"></label>
               </div>
               <div class="form-section-title section-spaced"><span class="step-number">٣</span><div><h2>مرجع وثيقة النقل</h2><p>اختياري — يُستخرج الرقم والتاريخ تلقائياً من PDF المرفق ويمكن تعديله</p></div></div>
               <div class="form-grid">
@@ -234,6 +239,261 @@
             </form>
             <aside class="panel issue-aside"><div class="aside-icon">▤</div><h3>قبل حفظ الرحلة</h3><ul><li>تأكد من أن حالة الفسح المدخلة «مفسوح».</li><li>اختر شاحنة متاحة وسائقاً نشطاً.</li><li>أدخل بيانات العميل ووجهة التسليم بدقة.</li></ul><div class="aside-warning"><strong>تنويه</strong><p>إدخال رقم الوثيقة يدوي ولا يثبت صحته؛ لا يتم حالياً إصدار أو تنزيل PDF حكومي من النظام.</p></div></aside>
           </div>
+        </section>
+
+        <section class="view" id="view-domestic">
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">إدارة النقل الداخلي</span>
+              <h1>نقل خارج الميناء</h1>
+              <p>تسجيل وإدارة عمليات النقل الداخلي بين المدن والمستودعات والمصانع بدون ربط جمركي.</p>
+            </div>
+            <button id="toggle-domestic-form" class="button button-primary" type="button">＋ رحلة نقل داخلي جديدة</button>
+          </div>
+
+          <div id="domestic-form-wrap" class="panel inline-form-wrap hidden">
+            <form id="domestic-trip-form" class="inline-form">
+              <div class="form-section-title full-field"><div><h3>بيانات الرحلة والنقل الداخلي</h3><p>أدخل بيانات العميل وموقعي الانطلاق والوصول</p></div></div>
+              <label class="field">الشركة / العميل<input id="domestic-customer" name="customerName" required placeholder="اسم الشركة" list="customer-list"></label>
+              <label class="field">موقع التحميل (من)<input id="domestic-origin" name="origin" required placeholder="مثال: مستودع الرياض، المصنع، المدينة..."></label>
+              <label class="field">وجهة التسليم (إلى)<input id="domestic-destination" name="destination" required placeholder="مثال: الخرج، الدمام، مستودع العميل..."></label>
+              <label class="field">وصف الحمولة / البضاعة<input id="domestic-cargo" name="cargoDescription" placeholder="مثال: مواد بناء، طرود، بضائع عامة..."></label>
+              <label class="field">رقم البوليصة / إذن التحميل<input id="domestic-waybill" name="cargoWaybillNumber" placeholder="رقم بوليصة الشحن الداخلي"></label>
+              <label class="field">الشاحنة<select id="domestic-truck" name="truckId" required><option value="">اختر الشاحنة</option></select></label>
+              <label class="field">السائق<select id="domestic-driver" name="driverId" required><option value="">اختر السائق</option></select></label>
+              <label class="field">سعر النقل للشركة (ريال)<input id="domestic-client-rate" name="clientRate" type="number" step="0.01" min="0" placeholder="يُملأ تلقائياً من جدول الأسعار"></label>
+              <label class="field">أجر / تكلفة السائق (ريال)<input id="domestic-driver-fee" name="driverFee" type="number" step="0.01" min="0" placeholder="أجر السائق المقرر"></label>
+              <label class="field">رقم وثيقة النقل (اختياري)<input id="domestic-doc-number" name="manualDocumentNumber" placeholder="رقم وثيقة النقل إن وجد"></label>
+              <label class="field">تاريخ الوثيقة / النقل<input id="domestic-doc-date" name="manualDocumentDate" type="date"></label>
+              <label class="field full-field">مستندات ومرفقات النقل (PDF أو صور)<input id="domestic-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB.</small></label>
+              <div class="inline-form-actions full-field">
+                <button id="domestic-submit-button" class="button button-primary" type="submit">حفظ عملية النقل الداخلي</button>
+                <button id="cancel-domestic-button" class="button button-light" type="button">إلغاء</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>سجل عمليات النقل خارج الميناء</h2>
+                <p><span id="domestic-count">0</span> رحلة مسجلة</p>
+              </div>
+              <label class="compact-search">
+                <span>⌕</span>
+                <input id="domestic-filter" type="search" placeholder="ابحث بالشركة، المسار، السائق...">
+              </label>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>رقم الوثيقة / البوليصة</th>
+                    <th>الشركة المستلمة</th>
+                    <th>المسار (من ← إلى)</th>
+                    <th>الحمولة</th>
+                    <th>السائق والشاحنة</th>
+                    <th>سعر النقل (ريال)</th>
+                    <th>حالة الفوترة</th>
+                    <th>التاريخ</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="domestic-rows"></tbody>
+              </table>
+            </div>
+            <div id="domestic-empty" class="empty-state hidden">
+              <span>⇄</span>
+              <strong>لا توجد رحلات نقل داخلي مسجلة</strong>
+              <p>يمكنك تسجيل أول رحلة نقل خارج الميناء الآن.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-tariffs">
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">التسعير والتعريفة</span>
+              <h1>أسعار وتعريفة الشركات</h1>
+              <p>تحديد أسعار وتكاليف النقل المتفق عليها لكل شركة ومسار لاستخدامها في التسعير وإصدار الفواتير.</p>
+            </div>
+            <button id="toggle-tariff-form" class="button button-primary" type="button">＋ إضافة سعر مسار جديد</button>
+          </div>
+
+          <div id="tariff-form-wrap" class="panel inline-form-wrap hidden">
+            <form id="tariff-form" class="inline-form">
+              <input type="hidden" id="tariff-edit-id" name="id">
+              <label class="field">الشركة / العميل<input id="tariff-customer" name="customerName" required placeholder="اسم الشركة" list="customer-list"></label>
+              <label class="field">موقع التحميل (من)<input id="tariff-origin" name="origin" required placeholder="الميناء أو المدينة"></label>
+              <label class="field">موقع التسليم (إلى)<input id="tariff-destination" name="destination" required placeholder="المدينة أو المستودع"></label>
+              <label class="field">نوع الشحنة / المقاس<input id="tariff-cargo-type" name="cargoType" placeholder="مثال: 40 قدم، 20 قدم، عامة..."></label>
+              <label class="field">سعر النقل للشركة (ريال)<input id="tariff-price" name="price" type="number" step="0.01" min="0" required placeholder="0.00"></label>
+              <label class="field">أجر / تكلفة السائق المقدرة<input id="tariff-driver-cost" name="driverCost" type="number" step="0.01" min="0" placeholder="0.00"></label>
+              <label class="field full-field">ملاحظات المسار<input id="tariff-notes" name="notes" placeholder="شروط النقل أو تفاصيل إضافية"></label>
+              <div class="inline-form-actions full-field">
+                <button id="tariff-submit-button" class="button button-primary" type="submit">حفظ السعر</button>
+                <button id="cancel-tariff-button" class="button button-light" type="button">إلغاء</button>
+              </div>
+            </form>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>جدول تعريفة الأسعار المسجلة</h2>
+                <p><span id="tariff-count">0</span> تسعيرة مسار</p>
+              </div>
+              <label class="compact-search">
+                <span>⌕</span>
+                <input id="tariff-search" type="search" placeholder="ابحث بالشركة أو المسار...">
+              </label>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>الشركة</th>
+                    <th>من (التحميل)</th>
+                    <th>إلى (التسليم)</th>
+                    <th>نوع الشحنة</th>
+                    <th>سعر الشركة (ريال)</th>
+                    <th>أجر السائق (ريال)</th>
+                    <th>ملاحظات</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="tariff-rows"></tbody>
+              </table>
+            </div>
+            <div id="tariff-empty" class="empty-state hidden">
+              <span>🏷</span>
+              <strong>لا توجد أسعار مسجلة بعد</strong>
+              <p>أضف أسعار الرحلات للشركات ليتعرف عليها النظام تلقائياً عند إنشاء الرحلات.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-invoices">
+          <div class="page-heading">
+            <div>
+              <span class="eyebrow">الإدارة المالية</span>
+              <h1>الفواتير وحسابات الشركات</h1>
+              <p>إصدار الفواتير الضريبية للشركات، كشوف الحسابات، ومتابعة التحصيل لعمليات النقل المينائية والداخلية.</p>
+            </div>
+            <button id="toggle-invoice-wizard" class="button button-primary" type="button">＋ إنشاء فاتورة جديدة</button>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-icon blue">🧾</span><span class="stat-caption">إجمالي الفواتير</span></div>
+              <div class="stat-value" id="stat-invoice-count">0</div>
+              <div class="stat-foot"><span class="positive">● صادرة</span><span>فاتورة</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-icon green">﷼</span><span class="stat-caption">إجمالي المبالغ المفوترة</span></div>
+              <div class="stat-value" id="stat-invoice-total">0.00</div>
+              <div class="stat-foot"><span>شامل ضريبة القيمة المضافة</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-icon amber">⏳</span><span class="stat-caption">بانتظار الفوترة</span></div>
+              <div class="stat-value" id="stat-unbilled-count">0</div>
+              <div class="stat-foot"><span>رحلة غير مفوترة</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-icon violet">✓</span><span class="stat-caption">الفواتير المسددة</span></div>
+              <div class="stat-value" id="stat-paid-count">0</div>
+              <div class="stat-foot"><span class="positive">تم التحصيل</span></div>
+            </article>
+          </div>
+
+          <div id="invoice-wizard-wrap" class="panel hidden">
+            <div class="panel-heading">
+              <div>
+                <h2>إصدار فاتورة ضريبية لشركة</h2>
+                <p>اختر الشركة وحدد الرحلات المكتملة لإدراجها في الفاتورة</p>
+              </div>
+              <button id="close-invoice-wizard" class="button button-light" type="button">إغلاق</button>
+            </div>
+            <div class="invoice-wizard-body">
+              <div class="filters-grid">
+                <label class="field">اختر الشركة<select id="invoice-wizard-customer"><option value="">-- اختر الشركة لعرض رحلاتها --</option></select></label>
+                <label class="field">نسبة الضريبة (%)<input id="invoice-wizard-tax-rate" type="number" step="1" value="15"></label>
+                <label class="field">رقم الفاتورة المخصص (اختياري)<input id="invoice-wizard-number" placeholder="تلقائي: INV-YYYY-XXXX"></label>
+                <label class="field">ملاحظات الفاتورة<input id="invoice-wizard-notes" placeholder="شروط الدفع أو تعليمات"></label>
+              </div>
+
+              <div class="wizard-trips-section">
+                <div class="panel-heading">
+                  <div>
+                    <h3>الرحلات القابلة للفوترة</h3>
+                    <p id="unbilled-selection-status">اختر شركة أعلاه لعرض عملياتها غير المفوترة</p>
+                  </div>
+                  <button id="invoice-select-all-trips" class="button button-light" type="button">تحديد الكل</button>
+                </div>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th><input id="invoice-master-checkbox" type="checkbox"></th>
+                        <th>تاريخ الرحلة</th>
+                        <th>نوع النقل</th>
+                        <th>البيان / البوليصة</th>
+                        <th>الحاوية / الحمولة</th>
+                        <th>المسار (من ← إلى)</th>
+                        <th>سعر الرحلة (ريال)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="invoice-unbilled-rows">
+                      <tr><td colspan="7" class="empty-cell">يرجى اختيار شركة من القائمة أعلاه</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="invoice-summary-card">
+                <div class="summary-line"><span>المجموع قبل الضريبة:</span><strong id="invoice-calc-subtotal">0.00 ر.س</strong></div>
+                <div class="summary-line"><span>ضريبة القيمة المضافة (15%):</span><strong id="invoice-calc-tax">0.00 ر.س</strong></div>
+                <div class="summary-line total-line"><span>الإجمالي النهائي المستحق:</span><strong id="invoice-calc-total">0.00 ر.س</strong></div>
+                <button id="generate-invoice-button" class="button button-primary" type="button" disabled>إصدار الفاتورة الضريبية الآن</button>
+              </div>
+            </div>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>سجل الفواتير الصادرة</h2>
+                <p><span id="invoices-count">0</span> فاتورة مسجلة</p>
+              </div>
+              <label class="compact-search">
+                <span>⌕</span>
+                <input id="invoice-search" type="search" placeholder="ابحث برقم الفاتورة أو الشركة...">
+              </label>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>رقم الفاتورة</th>
+                    <th>الشركة / العميل</th>
+                    <th>تاريخ الإصدار</th>
+                    <th>عدد الرحلات</th>
+                    <th>المجموع قبل الضريبة</th>
+                    <th>الضريبة (15%)</th>
+                    <th>الإجمالي النهائي</th>
+                    <th>الحالة</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="invoices-rows"></tbody>
+              </table>
+            </div>
+            <div id="invoices-empty" class="empty-state hidden">
+              <span>🧾</span>
+              <strong>لا توجد فواتير صادرة بعد</strong>
+              <p>اضغط على "إنشاء فاتورة جديدة" لإصدار أول فاتورة للشركات.</p>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="view-fleet">
@@ -360,6 +620,24 @@
       <p class="driver-demo-note">تُحفظ تحديثات الرحلة على خادم الشركة. لا تمثل هذه التحديثات إصداراً حكومياً.</p>
     </main>
   </div>
+  <datalist id="customer-list"></datalist>
+
+  <div id="invoice-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="printable-invoice-title">
+    <div class="modal-backdrop" id="invoice-modal-backdrop"></div>
+    <div class="modal-content invoice-modal-content">
+      <div class="modal-header no-print">
+        <h2 id="printable-invoice-title">معاينة الفاتورة الضريبية</h2>
+        <div class="modal-actions">
+          <button id="print-invoice-btn" class="button button-primary" type="button">🖨 طباعة الفاتورة / PDF</button>
+          <button id="close-invoice-modal-btn" class="button button-light" type="button">✕ إغلاق</button>
+        </div>
+      </div>
+      <div id="printable-invoice-area" class="printable-invoice">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
