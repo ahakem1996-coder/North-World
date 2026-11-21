@@ -845,7 +845,21 @@ function dateOffset(days) {
   return dateOnly(date);
 }
 
-let state = { trucks: [], drivers: [], clearances: [], docs: [], accounts: [], ports: [], tripExpenses: [], fasahAppointments: [] };
+let state = {
+  trucks: [],
+  drivers: [],
+  clearances: [],
+  docs: [],
+  accounts: [],
+  ports: [],
+  tripExpenses: [],
+  fasahAppointments: [],
+  tariffs: [],
+  invoices: [],
+  customers: []
+};
+let editingTariffId = null;
+let currentPrintableInvoiceId = null;
 let latestFasahPdfExtraction = null;
 let toastTimer;
 let currentAccount = null;
