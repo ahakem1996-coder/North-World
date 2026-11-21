@@ -426,7 +426,7 @@ async function getAppState(req) {
     }),
     isDriver ? Promise.resolve([]) : prisma.port.findMany({ orderBy: { name: "asc" } }),
     prisma.tripExpense.findMany({
-      where: isDriver ? { trip: { is: { driverId } } : {},
+      where: isDriver ? { trip: { is: { driverId } } } : {},
       include: tripExpenseInclude,
       orderBy: { createdAt: "desc" }
     }),
@@ -2169,26 +2169,25 @@ router.get("/reports.xlsx", requireAdmin, async (req, res) => {
       : daysRemaining === null ? "غير محدد"
         : daysRemaining < 0 ? "متأخرة"
           : daysRemaining <= 2 ? "تقترب المهلة" : "ضمن المهلة";
-    const isDomestic = trip.tripType === "DOMESTIC";
     const row = sheet.addRow({
-      operationAt: trip.transportDocument?.issuedAt || trip.operationAt,
-      clearedAt: trip.customsClearance?.clearedAt || "",
+      operationAt: trip.operationAt,
+      clearedAt: trip.customsClearance.clearedAt || "",
       customer: trip.customer.name,
       driver: trip.driver.name,
       nationalId: trip.driver.nationalId,
       phone: trip.driver.phone,
-      documentNumber: trip.transportDocument?.documentNumber || (isDomestic ? "نقل داخلي" : "غير صادر"),
+      documentNumber: trip.transportDocument?.documentNumber || "غير صادر",
       documentStatus: trip.transportDocument?.source === "MANUAL_ENTRY"
         ? "مدخل يدوياً"
-        : trip.transportDocument?.status || (isDomestic ? "نقل داخلي" : "DRAFT"),
+        : trip.transportDocument?.status || "DRAFT",
       plateNumber: trip.truck?.plateNumber || trip.truckPlateNumber,
       fleetNumber: trip.truck?.fleetNumber || trip.truckFleetNumber,
-      containerNumber: trip.container?.containerNumber || (isDomestic ? "نقل داخلي" : "—"),
-      size: trip.container ? (trip.container.size === "FT_20" ? "20 قدم" : "40 قدم") : (isDomestic ? "—" : "—"),
-      type: trip.container?.type || (isDomestic ? "نقل داخلي" : "—"),
-      sealNumber: trip.customsClearance?.shippingSealNumber || "",
-      declarationNumber: trip.customsClearance?.declarationNumber || (isDomestic ? "نقل داخلي" : ""),
-      port: trip.port?.name || trip.originLocation || (isDomestic ? "نقل داخلي" : ""),
+      containerNumber: trip.container.containerNumber,
+      size: trip.container.size === "FT_20" ? "20 قدم" : "40 قدم",
+      type: trip.container.type,
+      sealNumber: trip.customsClearance.shippingSealNumber || "",
+      declarationNumber: trip.customsClearance.declarationNumber,
+      port: trip.port.name,
       destination: trip.deliveryDestination,
       returnDueAt: trip.emptyReturnDueAt || "",
       returnedAt: trip.emptyReturnedAt || "",
