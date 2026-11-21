@@ -2047,6 +2047,45 @@ function beginTruckEdit(id) {
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+$("#admin-setup-form")?.addEventListener("submit", setupFirstAdmin);
+$("#login-form")?.addEventListener("submit", login);
+
+$$("[data-language-toggle]").forEach(button => {
+  button.addEventListener("click", () => {
+    language = language === "ar" ? "en" : "ar";
+    localStorage.setItem(LANGUAGE_KEY, language);
+    localizeDocument();
+  });
+});
+
+$$("[data-view]").forEach(button => {
+  button.addEventListener("click", () => switchView(button.dataset.view));
+});
+
+$("#logout-button")?.addEventListener("click", logout);
+$("#driver-logout-button")?.addEventListener("click", logout);
+
+restoreSessionOrShowLogin();
+
+function beginTruckEdit(id) {
+  const truck = truckById(id);
+  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
+  if (editingDriverId) cancelDriverEdit();
+  const form = $("#truck-form");
+  editingTruckId = truck.id;
+  form.reset();
+  populateTruckDriverOptions();
+  form.elements.fleetNumber.value = truck.fleetNumber;
+  form.elements.plateNumber.value = truck.plateNumber;
+  form.elements.serialNumber.value = truck.serialNumber;
+  form.elements.model.value = truck.model;
+  form.elements.driverId.value = truck.driverId;
+  $("#truck-submit-button").textContent = "حفظ التعديلات";
+  $("#cancel-truck-edit").classList.remove("hidden");
+  $("#truck-form-wrap").classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 function cancelTruckEdit() {
   editingTruckId = null;
   $("#truck-form").reset();
@@ -2166,22 +2205,6 @@ async function deleteTruck(id) {
 }
 
 function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function cancelTruckEdit() {
