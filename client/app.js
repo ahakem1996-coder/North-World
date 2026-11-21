@@ -2067,6 +2067,8 @@ $("#driver-logout-button")?.addEventListener("click", logout);
 
 restoreSessionOrShowLogin();
 
+// Duplicate and trailing function stubs removed to fix file corruption and allow login page to load again.
+// The following is the correct start of the beginTruckEdit function:
 function beginTruckEdit(id) {
   const truck = truckById(id);
   if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
