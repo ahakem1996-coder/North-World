@@ -54,7 +54,7 @@
         <button class="nav-link active" data-view="dashboard"><span class="nav-icon">⌂</span>لوحة التحكم</button>
         <button class="nav-link" data-view="fasah"><span class="nav-icon">⌕</span>استعلام الفسح</button>
         <button class="nav-link" data-view="issue"><span class="nav-icon">▤</span>إصدار وثيقة نقل</button>
-        <button class="nav-link" data-view="domestic"><span class="nav-icon">⇄</span>نقل خارج الميناء</button>
+        <button class="nav-link" data-view="domestic"><span class="nav-icon">⇄</span>النقل الداخلي</button>
         <button class="nav-link" data-view="tariffs"><span class="nav-icon">🏷</span>أسعار الشركات</button>
         <button class="nav-link" data-view="invoices"><span class="nav-icon">🧾</span>الفواتير والحسابات</button>
         <button class="nav-link" data-view="fleet"><span class="nav-icon">▰</span>الأسطول والسائقون</button>
@@ -244,30 +244,30 @@
         <section class="view" id="view-domestic">
           <div class="page-heading">
             <div>
-              <span class="eyebrow">إدارة النقل الداخلي</span>
-              <h1>نقل خارج الميناء</h1>
-              <p>تسجيل وإدارة عمليات النقل الداخلي بين المدن والمستودعات والمصانع بدون ربط جمركي.</p>
+              <span class="eyebrow">إدارة العمليات الداخلية</span>
+              <h1>النقل الداخلي</h1>
+              <p>تسجيل وإدارة عمليات النقل الداخلي بين المدن والمستودعات وإرسال الطلبات للسائقين مباشرة للمتابعة والفوترة.</p>
             </div>
             <button id="toggle-domestic-form" class="button button-primary" type="button">＋ رحلة نقل داخلي جديدة</button>
           </div>
 
           <div id="domestic-form-wrap" class="panel inline-form-wrap hidden">
             <form id="domestic-trip-form" class="inline-form">
-              <div class="form-section-title full-field"><div><h3>بيانات الرحلة والنقل الداخلي</h3><p>أدخل بيانات العميل وموقعي الانطلاق والوصول</p></div></div>
+              <div class="form-section-title full-field"><div><h3>بيانات الرحلة والنقل الداخلي</h3><p>أدخل بيانات العميل والمسار وتعيين السائق ليتم إرسال الطلب إليه فوراً</p></div></div>
               <label class="field">الشركة / العميل<input id="domestic-customer" name="customerName" required placeholder="اسم الشركة" list="customer-list"></label>
               <label class="field">موقع التحميل (من)<input id="domestic-origin" name="origin" required placeholder="مثال: مستودع الرياض، المصنع، المدينة..."></label>
               <label class="field">وجهة التسليم (إلى)<input id="domestic-destination" name="destination" required placeholder="مثال: الخرج، الدمام، مستودع العميل..."></label>
-              <label class="field">وصف الحمولة / البضاعة<input id="domestic-cargo" name="cargoDescription" placeholder="مثال: مواد بناء، طرود، بضائع عامة..."></label>
-              <label class="field">رقم البوليصة / إذن التحميل<input id="domestic-waybill" name="cargoWaybillNumber" placeholder="رقم بوليصة الشحن الداخلي"></label>
+              <label class="field">تاريخ الرحلة / النقل<input id="domestic-doc-date" name="manualDocumentDate" type="date" required></label>
+              <label class="field">السائق المكلف<select id="domestic-driver" name="driverId" required><option value="">اختر السائق</option></select></label>
               <label class="field">الشاحنة<select id="domestic-truck" name="truckId" required><option value="">اختر الشاحنة</option></select></label>
-              <label class="field">السائق<select id="domestic-driver" name="driverId" required><option value="">اختر السائق</option></select></label>
               <label class="field">سعر النقل للشركة (ريال)<input id="domestic-client-rate" name="clientRate" type="number" step="0.01" min="0" placeholder="يُملأ تلقائياً من جدول الأسعار"></label>
               <label class="field">أجر / تكلفة السائق (ريال)<input id="domestic-driver-fee" name="driverFee" type="number" step="0.01" min="0" placeholder="أجر السائق المقرر"></label>
+              <label class="field">وصف الحمولة / البضاعة<input id="domestic-cargo" name="cargoDescription" placeholder="مثال: مواد بناء، طرود، بضائع عامة..."></label>
+              <label class="field">رقم البوليصة / إذن التحميل<input id="domestic-waybill" name="cargoWaybillNumber" placeholder="رقم بوليصة الشحن الداخلي"></label>
               <label class="field">رقم وثيقة النقل (اختياري)<input id="domestic-doc-number" name="manualDocumentNumber" placeholder="رقم وثيقة النقل إن وجد"></label>
-              <label class="field">تاريخ الوثيقة / النقل<input id="domestic-doc-date" name="manualDocumentDate" type="date"></label>
               <label class="field full-field">مستندات ومرفقات النقل (PDF أو صور)<input id="domestic-attachments" name="attachments" class="file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple><small class="file-hint">حتى 4 ملفات، بإجمالي 8 MB.</small></label>
               <div class="inline-form-actions full-field">
-                <button id="domestic-submit-button" class="button button-primary" type="submit">حفظ عملية النقل الداخلي</button>
+                <button id="domestic-submit-button" class="button button-primary" type="submit">حفظ وإرسال الطلب للسائق</button>
                 <button id="cancel-domestic-button" class="button button-light" type="button">إلغاء</button>
               </div>
             </form>
@@ -276,7 +276,7 @@
           <section class="panel">
             <div class="panel-heading">
               <div>
-                <h2>سجل عمليات النقل خارج الميناء</h2>
+                <h2>سجل عمليات النقل الداخلي</h2>
                 <p><span id="domestic-count">0</span> رحلة مسجلة</p>
               </div>
               <label class="compact-search">
@@ -294,6 +294,7 @@
                     <th>الحمولة</th>
                     <th>السائق والشاحنة</th>
                     <th>سعر النقل (ريال)</th>
+                    <th>حالة الطلب / السائق</th>
                     <th>حالة الفوترة</th>
                     <th>التاريخ</th>
                     <th>إجراءات</th>
@@ -305,7 +306,7 @@
             <div id="domestic-empty" class="empty-state hidden">
               <span>⇄</span>
               <strong>لا توجد رحلات نقل داخلي مسجلة</strong>
-              <p>يمكنك تسجيل أول رحلة نقل خارج الميناء الآن.</p>
+              <p>يمكنك تسجيل أول رحلة نقل داخلي الآن وإرسالها للسائق.</p>
             </div>
           </section>
         </section>

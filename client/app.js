@@ -15,6 +15,18 @@ const TRANSLATIONS = Object.freeze({
   "استعلام عن فسح": "Look Up Clearance",
   "إصدار وثيقة نقل": "Issue Transport Document",
   "إصدار وثيقة": "Issue Document",
+  "النقل الداخلي": "Domestic Transport",
+  "إدارة العمليات الداخلية": "Domestic Operations Management",
+  "أسعار الشركات": "Company Rates",
+  "أسعار وتعريفة الشركات": "Company Tariff Rates",
+  "الفواتير والحسابات": "Invoices & Accounts",
+  "الفواتير وحسابات الشركات": "Invoices & Company Accounts",
+  "إنشاء فاتورة جديدة": "Create New Invoice",
+  "إصدار فاتورة جديدة": "Issue New Invoice",
+  "رحلة نقل داخلي جديدة": "New Domestic Trip",
+  "سجل عمليات النقل الداخلي": "Domestic Operations Log",
+  "جدول تعريفة الأسعار المسجلة": "Tariff Rates Table",
+  "سجل الفواتير الصادرة": "Issued Invoices Log",
   "الأسطول والسائقون": "Fleet & Drivers",
   "تتبع الرحلات": "Trip Tracking",
   "تتبع رحلات السائقين": "Driver Trip Tracking",
@@ -1139,6 +1151,12 @@ async function refreshServerState() {
   renderDrivers();
   populateTruckDriverOptions();
   populateIssueOptions($("#issue-clearance").value);
+  renderDomesticTrips();
+  populateDomesticOptions();
+  renderTariffs();
+  renderInvoices();
+  populateInvoiceWizardCustomers();
+  populateCustomerDatalist();
   renderTripTracking();
   renderTripExpenses();
   renderArchive($("#archive-query").value);
@@ -1367,6 +1385,9 @@ function switchView(name) {
     dashboard: "لوحة التحكم",
     fasah: "استعلام الفسح",
     issue: "إصدار وثيقة نقل",
+    domestic: "النقل الداخلي",
+    tariffs: "أسعار وتعريفة الشركات",
+    invoices: "الفواتير وحسابات الشركات",
     fleet: "الأسطول والسائقون",
     tracking: "تتبع الرحلات",
     expenses: "تكاليف الرحلات",
@@ -1379,6 +1400,9 @@ function switchView(name) {
   if (name === "dashboard") renderDashboard();
   if (name === "fasah") renderFasahResults($("#fasah-query").value);
   if (name === "issue") populateIssueOptions();
+  if (name === "domestic") { renderDomesticTrips(); populateDomesticOptions(); }
+  if (name === "tariffs") renderTariffs();
+  if (name === "invoices") { renderInvoices(); populateInvoiceWizardCustomers(); }
   if (name === "fleet") { renderFleet(); renderDrivers(); }
   if (name === "tracking") renderTripTracking();
   if (name === "expenses") renderTripExpenses();
@@ -2757,6 +2781,8 @@ async function issueDocument(event) {
         customerName,
         destination,
         returnDueAt: $("#issue-return-date").value || "",
+        clientRate: $("#issue-client-rate")?.value.trim() || "",
+        driverFee: $("#issue-driver-fee")?.value.trim() || "",
         manualDocumentNumber,
         manualDocumentDate,
         attachments
@@ -3168,6 +3194,635 @@ function clearReportFilters() {
   renderReports();
 }
 
+// ==========================================
+// TARIFFS, DOMESTIC TRIPS & INVOICES MODULE
+// ==========================================
+
+function populateCustomerDatalist() {
+  const datalist = $("#customer-list");
+  if (!datalist) return;
+  const customers = new Set();
+  (state.customers || []).forEach(c => c.name && customers.add(c.name));
+  (state.docs || []).forEach(d => d.customerName && customers.add(d.customerName));
+  (state.tariffs || []).forEach(t => t.customerName && customers.add(t.customerName));
+  datalist.innerHTML = Array.from(customers).sort().map(name => `<option value="${escapeHtml(name)}">`).join("");
+}
+
+function findMatchingTariff(customerName, origin, destination) {
+  if (!customerName || !destination) return null;
+  const cName = customerName.trim().toLowerCase();
+  const dest = destination.trim().toLowerCase();
+  const orig = (origin || "").trim().toLowerCase();
+
+  return (state.tariffs || []).find(t => {
+    const matchCust = (t.customerName || "").toLowerCase() === cName;
+    const matchDest = (t.destination || "").toLowerCase().includes(dest) || dest.includes((t.destination || "").toLowerCase());
+    const matchOrig = !orig || (t.origin || "").toLowerCase().includes(orig) || orig.includes((t.origin || "").toLowerCase());
+    return matchCust && matchDest && matchOrig;
+  }) || (state.tariffs || []).find(t => {
+    const matchCust = (t.customerName || "").toLowerCase() === cName;
+    const matchDest = (t.destination || "").toLowerCase().includes(dest) || dest.includes((t.destination || "").toLowerCase());
+    return matchCust && matchDest;
+  });
+}
+
+function autoLookupDomesticTariff() {
+  const customer = $("#domestic-customer")?.value.trim();
+  const origin = $("#domestic-origin")?.value.trim();
+  const destination = $("#domestic-destination")?.value.trim();
+  const tariff = findMatchingTariff(customer, origin, destination);
+  if (tariff) {
+    if ($("#domestic-client-rate")) $("#domestic-client-rate").value = tariff.price;
+    if ($("#domestic-driver-fee") && tariff.driverCost) $("#domestic-driver-fee").value = tariff.driverCost;
+  }
+}
+
+function autoLookupIssueTariff() {
+  const customer = $("#issue-customer")?.value.trim();
+  const destination = $("#issue-destination")?.value.trim();
+  const clearance = clearanceById($("#issue-clearance")?.value);
+  const origin = clearance?.port?.name || "";
+  const tariff = findMatchingTariff(customer, origin, destination);
+  if (tariff) {
+    if ($("#issue-client-rate")) $("#issue-client-rate").value = tariff.price;
+    if ($("#issue-driver-fee") && tariff.driverCost) $("#issue-driver-fee").value = tariff.driverCost;
+  }
+}
+
+function populateDomesticOptions() {
+  const truckSelect = $("#domestic-truck");
+  const driverSelect = $("#domestic-driver");
+  if (!truckSelect || !driverSelect) return;
+
+  const currentTruck = truckSelect.value;
+  const currentDriver = driverSelect.value;
+
+  truckSelect.innerHTML = `<option value="">${translateText("اختر الشاحنة")}</option>` +
+    state.trucks
+      .filter(truck => !truck.deletedAt && (truck.status === "AVAILABLE" || truck.id === currentTruck))
+      .map(truck => {
+        const assignedDriver = driverById(truck.driverId);
+        const extra = assignedDriver ? ` (${assignedDriver.name})` : "";
+        return `<option value="${escapeHtml(truck.id)}">${escapeHtml(truck.plateNumber)} — ${escapeHtml(truck.fleetNumber)}${extra}</option>`;
+      }).join("");
+
+  driverSelect.innerHTML = `<option value="">${translateText("اختر السائق")}</option>` +
+    state.drivers
+      .filter(driver => !driver.deletedAt && driver.isActive)
+      .map(driver => `<option value="${escapeHtml(driver.id)}">${escapeHtml(driver.name)} (${escapeHtml(driver.phone)})</option>`)
+      .join("");
+
+  if (currentTruck) truckSelect.value = currentTruck;
+  if (currentDriver) driverSelect.value = currentDriver;
+
+  if ($("#domestic-doc-date") && !$("#domestic-doc-date").value) {
+    $("#domestic-doc-date").value = dateOnly();
+  }
+}
+
+function syncDomesticTruckDriver(source) {
+  if (source === "driver") {
+    const driverId = $("#domestic-driver")?.value;
+    if (!driverId) return;
+    const truck = state.trucks.find(t => t.driverId === driverId && t.status === "AVAILABLE" && !t.deletedAt);
+    if (truck && $("#domestic-truck")) $("#domestic-truck").value = truck.id;
+  } else if (source === "truck") {
+    const truckId = $("#domestic-truck")?.value;
+    if (!truckId) return;
+    const truck = truckById(truckId);
+    if (truck && truck.driverId && $("#domestic-driver")) $("#domestic-driver").value = truck.driverId;
+  }
+}
+
+function renderDomesticTrips(query = "") {
+  const tbody = $("#domestic-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#domestic-filter")?.value ?? "").trim().toLowerCase();
+
+  const domesticDocs = state.docs.filter(doc => doc.tripType === "DOMESTIC");
+  const filtered = domesticDocs.filter(doc => {
+    if (!q) return true;
+    return (
+      (doc.customerName || "").toLowerCase().includes(q) ||
+      (doc.origin || "").toLowerCase().includes(q) ||
+      (doc.destination || "").toLowerCase().includes(q) ||
+      (doc.documentNumber || "").toLowerCase().includes(q) ||
+      (doc.cargoDescription || "").toLowerCase().includes(q) ||
+      (doc.truckPlateNumber || "").toLowerCase().includes(q) ||
+      (doc.cargoWaybillNumber || "").toLowerCase().includes(q)
+    );
+  });
+
+  if ($("#domestic-count")) $("#domestic-count").textContent = domesticDocs.length;
+  if ($("#domestic-empty")) $("#domestic-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(doc => {
+    const driver = driverById(doc.driverId);
+    const driverName = driver ? driver.name : "—";
+    const driverStatusClass = doc.requestStatus === "ACCEPTED" ? "status-issued" : "status-pending";
+    const driverStatusText = doc.requestStatus === "ACCEPTED" ? "مقبولة من السائق" : "بانتظار قبول السائق";
+    const billingPill = doc.billingStatus === "PAID"
+      ? `<span class="status-pill status-paid">${translateText("مسددة")}</span>`
+      : doc.billingStatus === "INVOICED"
+      ? `<span class="status-pill status-invoiced">${translateText("مفوترة")} (${escapeHtml(doc.invoiceNumber || "")})</span>`
+      : `<span class="status-pill status-unbilled">${translateText("غير مفوترة")}</span>`;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(doc.documentNumber || doc.cargoWaybillNumber || "—")}</strong></td>
+        <td>${escapeHtml(doc.customerName || "—")}</td>
+        <td><span class="route-badge">${escapeHtml(doc.origin || "—")} ← ${escapeHtml(doc.destination || "—")}</span></td>
+        <td>${escapeHtml(doc.cargoDescription || "بضائع عامة")}</td>
+        <td>${escapeHtml(driverName)}<br><small class="plate-text">${escapeHtml(doc.truckPlateNumber || "")}</small></td>
+        <td><strong>${doc.clientRate ? `${Number(doc.clientRate).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : "—"}</strong></td>
+        <td><span class="status-pill ${driverStatusClass}">${translateText(driverStatusText)}</span></td>
+        <td>${billingPill}</td>
+        <td>${formatDate(doc.issuedAt)}</td>
+        <td>
+          <button class="icon-button" data-action="archive" data-id="${escapeHtml(doc.id)}" title="${translateText("عرض في الأرشيف")}">▣</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function handleDomesticTripSubmit(event) {
+  event.preventDefault();
+  const customerName = $("#domestic-customer")?.value.trim();
+  const origin = $("#domestic-origin")?.value.trim();
+  const destination = $("#domestic-destination")?.value.trim();
+  const driverId = $("#domestic-driver")?.value;
+  const truckId = $("#domestic-truck")?.value;
+  const manualDocumentDate = $("#domestic-doc-date")?.value || dateOnly();
+  const clientRate = $("#domestic-client-rate")?.value.trim() || "";
+  const driverFee = $("#domestic-driver-fee")?.value.trim() || "";
+  const cargoDescription = $("#domestic-cargo")?.value.trim() || "";
+  const cargoWaybillNumber = $("#domestic-waybill")?.value.trim() || "";
+  const manualDocumentNumber = $("#domestic-doc-number")?.value.trim() || "";
+
+  if (!customerName || !origin || !destination) {
+    return showToast("أكمل اسم الشركة وموقعي التحميل والتسليم.", true);
+  }
+  if (!truckId) return showToast("اختر شاحنة متاحة.", true);
+  if (!driverId) return showToast("اختر سائقاً نشطاً.", true);
+
+  const driver = driverById(driverId);
+  if (!driver || !driver.isActive) return showToast("اختر سائقاً نشطاً.", true);
+  if (!state.accounts.some(account => account.role === "DRIVER" && account.driverId === driver.id && !account.deletedAt)) {
+    return showToast("أنشئ حساباً للسائق المحدد قبل تعيين رحلة له.", true);
+  }
+
+  try {
+    const attachments = await encodeSelectedAttachments($("#domestic-attachments"));
+    await apiRequest("/api/trips/domestic", {
+      method: "POST",
+      body: {
+        customerName,
+        origin,
+        destination,
+        truckId,
+        driverId,
+        clientRate,
+        driverFee,
+        cargoDescription,
+        cargoWaybillNumber,
+        manualDocumentNumber,
+        manualDocumentDate,
+        attachments
+      }
+    });
+
+    $("#domestic-trip-form").reset();
+    $("#domestic-form-wrap").classList.add("hidden");
+    await refreshServerState();
+    showToast("تم تسجيل رحلة النقل الداخلي وإرسال الطلب للسائق بنجاح!");
+    switchView("domestic");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderTariffs(query = "") {
+  const tbody = $("#tariff-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#tariff-search")?.value ?? "").trim().toLowerCase();
+
+  const filtered = (state.tariffs || []).filter(item => {
+    if (!q) return true;
+    return (
+      (item.customerName || "").toLowerCase().includes(q) ||
+      (item.origin || "").toLowerCase().includes(q) ||
+      (item.destination || "").toLowerCase().includes(q) ||
+      (item.cargoType || "").toLowerCase().includes(q) ||
+      (item.notes || "").toLowerCase().includes(q)
+    );
+  });
+
+  if ($("#tariff-count")) $("#tariff-count").textContent = (state.tariffs || []).length;
+  if ($("#tariff-empty")) $("#tariff-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(item => `
+    <tr>
+      <td><strong>${escapeHtml(item.customerName)}</strong></td>
+      <td>${escapeHtml(item.origin)}</td>
+      <td>${escapeHtml(item.destination)}</td>
+      <td>${escapeHtml(item.cargoType || "—")}</td>
+      <td><strong style="color: #059669;">${Number(item.price).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</strong></td>
+      <td>${item.driverCost ? `${Number(item.driverCost).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : "—"}</td>
+      <td><small>${escapeHtml(item.notes || "—")}</small></td>
+      <td>
+        <button class="button button-light button-small" data-action="edit-tariff" data-id="${escapeHtml(item.id)}">${translateText("تعديل")}</button>
+        <button class="button button-danger button-small" data-action="delete-tariff" data-id="${escapeHtml(item.id)}">${translateText("حذف")}</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function handleTariffSubmit(event) {
+  event.preventDefault();
+  const customerName = $("#tariff-customer")?.value.trim();
+  const origin = $("#tariff-origin")?.value.trim();
+  const destination = $("#tariff-destination")?.value.trim();
+  const cargoType = $("#tariff-cargo-type")?.value.trim() || "";
+  const price = $("#tariff-price")?.value.trim();
+  const driverCost = $("#tariff-driver-cost")?.value.trim() || "";
+  const notes = $("#tariff-notes")?.value.trim() || "";
+
+  if (!customerName || !origin || !destination || !price) {
+    return showToast("أكمل اسم الشركة والمسار وسعر النقل.", true);
+  }
+
+  try {
+    if (editingTariffId) {
+      await apiRequest(`/api/tariffs/${encodeURIComponent(editingTariffId)}`, {
+        method: "PUT",
+        body: { origin, destination, cargoType, price, driverCost, notes }
+      });
+      showToast("تم تحديث سعر المسار.");
+    } else {
+      await apiRequest("/api/tariffs", {
+        method: "POST",
+        body: { customerName, origin, destination, cargoType, price, driverCost, notes }
+      });
+      showToast("تمت إضافة سعر المسار للشركة.");
+    }
+    cancelTariffEdit();
+    await refreshServerState();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function editTariff(id) {
+  const tariff = (state.tariffs || []).find(t => t.id === id);
+  if (!tariff) return;
+  editingTariffId = id;
+  if ($("#tariff-edit-id")) $("#tariff-edit-id").value = id;
+  if ($("#tariff-customer")) {
+    $("#tariff-customer").value = tariff.customerName;
+    $("#tariff-customer").disabled = true;
+  }
+  if ($("#tariff-origin")) $("#tariff-origin").value = tariff.origin;
+  if ($("#tariff-destination")) $("#tariff-destination").value = tariff.destination;
+  if ($("#tariff-cargo-type")) $("#tariff-cargo-type").value = tariff.cargoType || "";
+  if ($("#tariff-price")) $("#tariff-price").value = tariff.price;
+  if ($("#tariff-driver-cost")) $("#tariff-driver-cost").value = tariff.driverCost || "";
+  if ($("#tariff-notes")) $("#tariff-notes").value = tariff.notes || "";
+  if ($("#tariff-submit-button")) $("#tariff-submit-button").textContent = translateText("حفظ التعديلات");
+  $("#tariff-form-wrap")?.classList.remove("hidden");
+  window.scrollTo({ top: $("#tariff-form-wrap").offsetTop - 80, behavior: "smooth" });
+}
+
+function cancelTariffEdit() {
+  editingTariffId = null;
+  $("#tariff-form")?.reset();
+  if ($("#tariff-customer")) $("#tariff-customer").disabled = false;
+  if ($("#tariff-submit-button")) $("#tariff-submit-button").textContent = translateText("حفظ السعر");
+  $("#tariff-form-wrap")?.classList.add("hidden");
+}
+
+async function deleteTariff(id) {
+  const tariff = (state.tariffs || []).find(t => t.id === id);
+  if (!tariff) return;
+  if (!window.confirm(`هل أنت متأكد من حذف تسعيرة المسار (${tariff.origin} ← ${tariff.destination}) لشركة ${tariff.customerName}؟`)) {
+    return;
+  }
+  try {
+    await apiRequest(`/api/tariffs/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await refreshServerState();
+    showToast("تم حذف تسعيرة المسار.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderInvoices(query = "") {
+  const tbody = $("#invoices-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#invoice-search")?.value ?? "").trim().toLowerCase();
+
+  const invoices = state.invoices || [];
+  const filtered = invoices.filter(inv => {
+    if (!q) return true;
+    return (
+      (inv.invoiceNumber || "").toLowerCase().includes(q) ||
+      (inv.customerName || "").toLowerCase().includes(q) ||
+      (inv.notes || "").toLowerCase().includes(q)
+    );
+  });
+
+  const totalInvoiced = invoices.reduce((acc, inv) => acc + Number(inv.totalAmount || 0), 0);
+  const paidCount = invoices.filter(inv => inv.status === "PAID").length;
+  const unbilledCount = state.docs.filter(d => d.billingStatus === "UNBILLED").length;
+
+  if ($("#invoices-count")) $("#invoices-count").textContent = invoices.length;
+  if ($("#stat-invoice-count")) $("#stat-invoice-count").textContent = invoices.length;
+  if ($("#stat-invoice-total")) $("#stat-invoice-total").textContent = `${totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+  if ($("#stat-unbilled-count")) $("#stat-unbilled-count").textContent = unbilledCount;
+  if ($("#stat-paid-count")) $("#stat-paid-count").textContent = paidCount;
+  if ($("#invoices-empty")) $("#invoices-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(inv => {
+    const statusPill = inv.status === "PAID"
+      ? `<span class="status-pill status-paid">${translateText("مسددة")}</span>`
+      : inv.status === "CANCELLED"
+      ? `<span class="status-pill status-cancelled">${translateText("ملغاة")}</span>`
+      : `<span class="status-pill status-invoiced">${translateText("صادرة")}</span>`;
+
+    const actionButtons = `
+      <button class="button button-primary button-small" data-action="print-invoice" data-id="${escapeHtml(inv.id)}">🖨 ${translateText("معاينة وطباعة")}</button>
+      ${inv.status === "ISSUED" ? `
+        <button class="button button-green button-small" data-action="invoice-paid" data-id="${escapeHtml(inv.id)}">✓ ${translateText("تسجيل سداد")}</button>
+        <button class="button button-danger button-small" data-action="invoice-cancel" data-id="${escapeHtml(inv.id)}">✕ ${translateText("إلغاء")}</button>
+      ` : ""}
+    `;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(inv.invoiceNumber)}</strong></td>
+        <td>${escapeHtml(inv.customerName)}</td>
+        <td>${formatDate(inv.issueDate)}</td>
+        <td><span class="record-count">${inv.tripCount}</span></td>
+        <td>${Number(inv.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        <td>${Number(inv.taxAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        <td><strong style="color: #059669;">${Number(inv.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</strong></td>
+        <td>${statusPill}</td>
+        <td>${actionButtons}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function populateInvoiceWizardCustomers() {
+  const select = $("#invoice-wizard-customer");
+  if (!select) return;
+  const customersWithUnbilled = new Set();
+  state.docs.forEach(doc => {
+    if (doc.billingStatus === "UNBILLED" && doc.customerName) {
+      customersWithUnbilled.add(doc.customerName);
+    }
+  });
+
+  const selectedVal = select.value;
+  select.innerHTML = `<option value="">${translateText("-- اختر الشركة لعرض رحلاتها --")}</option>` +
+    Array.from(customersWithUnbilled).sort().map(name => {
+      const count = state.docs.filter(d => d.customerName === name && d.billingStatus === "UNBILLED").length;
+      return `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${count} رحلات غير مفوترة)</option>`;
+    }).join("");
+
+  if (selectedVal && customersWithUnbilled.has(selectedVal)) {
+    select.value = selectedVal;
+  }
+}
+
+function renderUnbilledTripsForCustomer(customerName) {
+  const tbody = $("#invoice-unbilled-rows");
+  const statusElem = $("#unbilled-selection-status");
+  if (!tbody) return;
+
+  if (!customerName) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">${translateText("يرجى اختيار شركة من القائمة أعلاه")}</td></tr>`;
+    if (statusElem) statusElem.textContent = translateText("اختر شركة أعلاه لعرض عملياتها غير المفوترة");
+    calculateInvoiceWizardTotals();
+    return;
+  }
+
+  const unbilledTrips = state.docs.filter(doc => doc.customerName === customerName && doc.billingStatus === "UNBILLED");
+
+  if (unbilledTrips.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">${translateText("لا توجد رحلات غير مفوترة لهذه الشركة")}</td></tr>`;
+    if (statusElem) statusElem.textContent = translateText("لا توجد عمليات بانتظار الفوترة");
+    calculateInvoiceWizardTotals();
+    return;
+  }
+
+  if (statusElem) {
+    statusElem.textContent = `${unbilledTrips.length} ${translateText("رحلات متاحة للفوترة — حدد الرحلات لإدراجها")}`;
+  }
+
+  tbody.innerHTML = unbilledTrips.map(trip => {
+    const tripTypeLabel = trip.tripType === "DOMESTIC" ? "نقل داخلي" : "نقل ميناء";
+    const refNumber = trip.declarationNumber || trip.cargoWaybillNumber || trip.documentNumber || "—";
+    const cargoLabel = trip.containerNumber || trip.cargoDescription || "—";
+    const rateVal = trip.clientRate ? Number(trip.clientRate) : 0;
+
+    return `
+      <tr>
+        <td><input type="checkbox" class="trip-invoice-check" value="${escapeHtml(trip.tripId)}" data-rate="${rateVal}" checked></td>
+        <td>${formatDate(trip.issuedAt)}</td>
+        <td><span class="status-pill ${trip.tripType === "DOMESTIC" ? "status-domestic" : "status-port"}">${translateText(tripTypeLabel)}</span></td>
+        <td>${escapeHtml(refNumber)}</td>
+        <td>${escapeHtml(cargoLabel)}</td>
+        <td>${escapeHtml(trip.origin || "—")} ← ${escapeHtml(trip.destination || "—")}</td>
+        <td><strong>${rateVal ? `${rateVal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : `<span style="color: #b91c1c;">(غير محدد)</span>`}</strong></td>
+      </tr>
+    `;
+  }).join("");
+
+  calculateInvoiceWizardTotals();
+}
+
+function calculateInvoiceWizardTotals() {
+  const checkboxes = $$(".trip-invoice-check:checked", $("#invoice-unbilled-rows"));
+  let subtotal = 0;
+  checkboxes.forEach(cb => {
+    subtotal += Number(cb.dataset.rate || 0);
+  });
+
+  const taxRate = Number($("#invoice-wizard-tax-rate")?.value || 15);
+  const taxAmount = Number(((subtotal * taxRate) / 100).toFixed(2));
+  const total = Number((subtotal + taxAmount).toFixed(2));
+
+  if ($("#invoice-calc-subtotal")) $("#invoice-calc-subtotal").textContent = `${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+  if ($("#invoice-calc-tax")) $("#invoice-calc-tax").textContent = `${taxAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س (${taxRate}%)`;
+  if ($("#invoice-calc-total")) $("#invoice-calc-total").textContent = `${total.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+
+  if ($("#generate-invoice-button")) {
+    $("#generate-invoice-button").disabled = (checkboxes.length === 0);
+  }
+}
+
+async function handleGenerateInvoice() {
+  const customerName = $("#invoice-wizard-customer")?.value;
+  if (!customerName) return showToast("اختر الشركة أولاً.", true);
+
+  const selectedTrips = $$(".trip-invoice-check:checked", $("#invoice-unbilled-rows")).map(cb => cb.value);
+  if (selectedTrips.length === 0) return showToast("حدد على الأقل رحلة واحدة لإصدار الفاتورة.", true);
+
+  const taxRate = Number($("#invoice-wizard-tax-rate")?.value || 15);
+  const notes = $("#invoice-wizard-notes")?.value.trim() || "";
+  const customInvoiceNumber = $("#invoice-wizard-number")?.value.trim() || undefined;
+
+  try {
+    const created = await apiRequest("/api/invoices", {
+      method: "POST",
+      body: {
+        customerName,
+        tripIds: selectedTrips,
+        taxRate,
+        notes,
+        customInvoiceNumber
+      }
+    });
+
+    $("#invoice-wizard-wrap").classList.add("hidden");
+    await refreshServerState();
+    showToast("تم إصدار الفاتورة الضريبية بنجاح!");
+    openPrintableInvoice(created.id);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function openPrintableInvoice(invoiceId) {
+  const inv = (state.invoices || []).find(i => i.id === invoiceId);
+  if (!inv) return showToast("تعذر العثور على الفاتورة.", true);
+
+  currentPrintableInvoiceId = invoiceId;
+  const printArea = $("#printable-invoice-area");
+  if (!printArea) return;
+
+  const trips = inv.trips || [];
+  const rowsHtml = trips.map((trip, idx) => {
+    const tripTypeLabel = trip.tripType === "DOMESTIC" ? "نقل داخلي" : "نقل ميناء";
+    const refNumber = trip.declarationNumber || trip.cargoWaybillNumber || trip.documentNumber || "—";
+    const cargoLabel = trip.containerNumber || trip.cargoDescription || "—";
+    const rateVal = trip.clientRate ? Number(trip.clientRate) : 0;
+
+    return `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td>${formatDate(trip.issuedAt)}</td>
+        <td>${tripTypeLabel}</td>
+        <td>${escapeHtml(refNumber)}</td>
+        <td>${escapeHtml(cargoLabel)}</td>
+        <td>${escapeHtml(trip.origin || "—")} ← ${escapeHtml(trip.destination || "—")}</td>
+        <td>${escapeHtml(trip.truckPlateNumber || "—")}</td>
+        <td style="text-align: left; font-weight: 700;">${rateVal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+      </tr>
+    `;
+  }).join("");
+
+  printArea.innerHTML = `
+    <div class="inv-header">
+      <div class="inv-brand">
+        <img class="inv-brand-logo" src="assets/north-world-logo.jpeg" alt="North World Logo">
+        <div>
+          <h1 class="inv-company-name">عَالَمُ الشَّمَالِ لإدارة النقل</h1>
+          <p class="inv-company-subtitle">North World Transport Management</p>
+          <div class="inv-tax-number">الرقم الضريبي: <strong>310245896300003</strong></div>
+        </div>
+      </div>
+      <div class="inv-meta">
+        <h2 class="inv-title">فاتورة ضريبية</h2>
+        <div class="inv-badge status-pill status-invoiced">Tax Invoice</div>
+        <div>رقم الفاتورة: <strong>${escapeHtml(inv.invoiceNumber)}</strong></div>
+        <div>تاريخ الإصدار: <strong>${formatDate(inv.issueDate)}</strong></div>
+        <div>الحالة: <strong>${inv.status === "PAID" ? "مسددة" : "صادرة"}</strong></div>
+      </div>
+    </div>
+
+    <div class="inv-parties">
+      <div>
+        <div class="party-title">الشركة الموردة (الناقل)</div>
+        <div class="party-name">مؤسسة عالم الشمال للنقل البري</div>
+        <div>المملكة العربية السعودية — الرياض</div>
+        <div>هاتف: 0500000000 | البريد: info@northworld.sa</div>
+      </div>
+      <div>
+        <div class="party-title">بيانات العميل المستفيد</div>
+        <div class="party-name">${escapeHtml(inv.customerName)}</div>
+        <div>الرقم الضريبي للعميل: ${escapeHtml(inv.customerTaxNumber || "—")}</div>
+        <div>عدد عمليات النقل: ${inv.tripCount} رحلة</div>
+      </div>
+    </div>
+
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th style="width: 40px; text-align: center;">#</th>
+          <th>تاريخ الرحلة</th>
+          <th>نوع النقل</th>
+          <th>البيان / البوليصة</th>
+          <th>الحاوية / الشحنة</th>
+          <th>المسار (من ← إلى)</th>
+          <th>رقم السيارة</th>
+          <th style="text-align: left;">المبلغ (ريال)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <div class="inv-totals-box">
+      <table class="inv-totals-table">
+        <tr>
+          <td>المجموع قبل الضريبة:</td>
+          <td style="text-align: left; font-weight: 700;">${Number(inv.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+        <tr>
+          <td>ضريبة القيمة المضافة (${inv.taxRate}%):</td>
+          <td style="text-align: left; font-weight: 700;">${Number(inv.taxAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+        <tr class="grand-total">
+          <td>الإجمالي النهائي المستحق:</td>
+          <td style="text-align: left;">${Number(inv.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+      </table>
+    </div>
+
+    ${inv.notes ? `<div style="margin-bottom: 1.5rem; padding: 10px; background: #f8fafc; border-radius: 6px;"><strong>ملاحظات:</strong> ${escapeHtml(inv.notes)}</div>` : ""}
+
+    <div class="inv-footer">
+      <div>
+        <strong>الشروط والأحكام:</strong><br>
+        • هذه الفاتورة صادرة إلكترونياً من نظام عالم الشمال لإدارة النقل.<br>
+        • يرجى سداد المبلغ المستحق عبر الحساب البنكي المعتمد للمؤسسة.
+      </div>
+      <div class="inv-signature-block">
+        <div class="inv-signature-line"></div>
+        <div>الختم والتوقيع المعتمد</div>
+      </div>
+    </div>
+  `;
+
+  $("#invoice-modal")?.classList.remove("hidden");
+}
+
+async function updateInvoiceStatus(invoiceId, newStatus) {
+  try {
+    await apiRequest(`/api/invoices/${encodeURIComponent(invoiceId)}/status`, {
+      method: "PATCH",
+      body: { status: newStatus }
+    });
+    await refreshServerState();
+    showToast(newStatus === "PAID" ? "تم تسجيل سداد الفاتورة بنجاح." : "تم تحديث حالة الفاتورة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function init() {
   updateTodayLabel();
   populatePortFilter();
@@ -3177,6 +3832,12 @@ function init() {
   renderFasahResults("");
   renderArchive("");
   renderReports();
+  populateCustomerDatalist();
+  populateDomesticOptions();
+  renderDomesticTrips();
+  renderTariffs();
+  renderInvoices();
+  populateInvoiceWizardCustomers();
 
   document.addEventListener("click", event => {
     const languageButton = event.target.closest("[data-language-toggle]");
@@ -3225,6 +3886,11 @@ function init() {
     if (action.dataset.action === "edit-truck") beginTruckEdit(action.dataset.id);
     if (action.dataset.action === "edit-driver") beginDriverEdit(action.dataset.id);
     if (action.dataset.action === "edit-account") beginAccountEdit(action.dataset.id);
+    if (action.dataset.action === "edit-tariff") editTariff(action.dataset.id);
+    if (action.dataset.action === "delete-tariff") deleteTariff(action.dataset.id);
+    if (action.dataset.action === "print-invoice") openPrintableInvoice(action.dataset.id);
+    if (action.dataset.action === "invoice-paid") updateInvoiceStatus(action.dataset.id, "PAID");
+    if (action.dataset.action === "invoice-cancel") updateInvoiceStatus(action.dataset.id, "CANCELLED");
   });
   $("#fasah-search-form").addEventListener("submit", event => {
     event.preventDefault();
@@ -3356,6 +4022,71 @@ function init() {
   });
   $("#clear-filters").addEventListener("click", clearReportFilters);
   $("#export-excel").addEventListener("click", exportExcel);
+
+  // Domestic Trips listeners
+  $("#toggle-domestic-form")?.addEventListener("click", () => {
+    $("#domestic-form-wrap")?.classList.toggle("hidden");
+    populateDomesticOptions();
+  });
+  $("#cancel-domestic-button")?.addEventListener("click", () => {
+    $("#domestic-form-wrap")?.classList.add("hidden");
+  });
+  $("#domestic-trip-form")?.addEventListener("submit", handleDomesticTripSubmit);
+  $("#domestic-filter")?.addEventListener("input", event => renderDomesticTrips(event.target.value));
+  $("#domestic-customer")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-origin")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-destination")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-driver")?.addEventListener("change", () => syncDomesticTruckDriver("driver"));
+  $("#domestic-truck")?.addEventListener("change", () => syncDomesticTruckDriver("truck"));
+
+  // Tariff auto-lookup on Port issue form
+  $("#issue-customer")?.addEventListener("input", autoLookupIssueTariff);
+  $("#issue-destination")?.addEventListener("input", autoLookupIssueTariff);
+
+  // Tariffs listeners
+  $("#toggle-tariff-form")?.addEventListener("click", () => {
+    if (editingTariffId) cancelTariffEdit();
+    else $("#tariff-form-wrap")?.classList.toggle("hidden");
+  });
+  $("#cancel-tariff-button")?.addEventListener("click", cancelTariffEdit);
+  $("#tariff-form")?.addEventListener("submit", handleTariffSubmit);
+  $("#tariff-search")?.addEventListener("input", event => renderTariffs(event.target.value));
+
+  // Invoices listeners
+  $("#toggle-invoice-wizard")?.addEventListener("click", () => {
+    $("#invoice-wizard-wrap")?.classList.toggle("hidden");
+    populateInvoiceWizardCustomers();
+  });
+  $("#close-invoice-wizard")?.addEventListener("click", () => {
+    $("#invoice-wizard-wrap")?.classList.add("hidden");
+  });
+  $("#invoice-wizard-customer")?.addEventListener("change", event => {
+    renderUnbilledTripsForCustomer(event.target.value);
+  });
+  $("#invoice-wizard-tax-rate")?.addEventListener("input", calculateInvoiceWizardTotals);
+  $("#invoice-select-all-trips")?.addEventListener("click", () => {
+    const checks = $$(".trip-invoice-check", $("#invoice-unbilled-rows"));
+    const allChecked = checks.length > 0 && checks.every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+    calculateInvoiceWizardTotals();
+  });
+  $("#invoice-master-checkbox")?.addEventListener("change", event => {
+    $$(".trip-invoice-check", $("#invoice-unbilled-rows")).forEach(c => c.checked = event.target.checked);
+    calculateInvoiceWizardTotals();
+  });
+  $("#invoice-unbilled-rows")?.addEventListener("change", event => {
+    if (event.target.matches(".trip-invoice-check")) {
+      calculateInvoiceWizardTotals();
+    }
+  });
+  $("#generate-invoice-button")?.addEventListener("click", handleGenerateInvoice);
+  $("#invoice-search")?.addEventListener("input", event => renderInvoices(event.target.value));
+
+  // Invoice Modal actions
+  $("#print-invoice-btn")?.addEventListener("click", () => window.print());
+  $("#close-invoice-modal-btn")?.addEventListener("click", () => $("#invoice-modal")?.classList.add("hidden"));
+  $("#invoice-modal-backdrop")?.addEventListener("click", () => $("#invoice-modal")?.classList.add("hidden"));
+
   setAccountFormMode(false);
   updateAccountRoleFields();
   renderAccounts();
