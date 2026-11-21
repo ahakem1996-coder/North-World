@@ -1646,7 +1646,7 @@ function updateClearanceConfirmation() {
 
 function normalizePhoneNumber(value) {
   const digits = String(value || "")
-    .replace(/[٠-٩۰-۹]/g, digit => String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷٨٩".indexOf(digit) % 10))
+    .replace(/[٠-٩۰-۹]/g, digit => String("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".indexOf(digit) % 10))
     .replace(/\D/g, "");
   if (digits.startsWith("00966")) return `0${digits.slice(5)}`;
   if (digits.startsWith("966")) return `0${digits.slice(3)}`;
@@ -2016,7 +2016,7 @@ function updateBulkControls(type, visibleIds) {
 async function deleteTruck(id) {
   const truck = truckById(id);
   if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
+  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.`)) return;
   try {
     await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
     if (editingTruckId === id) cancelTruckEdit();
@@ -2047,3299 +2047,2061 @@ function beginTruckEdit(id) {
   form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-$("#admin-setup-form")?.addEventListener("submit", setupFirstAdmin);
-$("#login-form")?.addEventListener("submit", login);
+function cancelTruckEdit() {
+  editingTruckId = null;
+  $("#truck-form").reset();
+  $("#truck-submit-button").textContent = "حفظ الشاحنة";
+  $("#cancel-truck-edit").classList.add("hidden");
+  $("#truck-form-wrap").classList.add("hidden");
+  populateTruckDriverOptions();
+}
 
-$$("[data-language-toggle]").forEach(button => {
-  button.addEventListener("click", () => {
-    language = language === "ar" ? "en" : "ar";
-    localStorage.setItem(LANGUAGE_KEY, language);
-    localizeDocument();
+async function deleteDriver(id) {
+  const driver = driverById(id);
+  if (!driver || driver.deletedAt) return;
+  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
+  try {
+    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (editingDriverId === id) cancelDriverEdit();
+    selectedDriverIds.delete(id);
+    await refreshServerState();
+    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function beginDriverEdit(id) {
+  const driver = driverById(id);
+  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
+  if (editingTruckId) cancelTruckEdit();
+  const form = $("#driver-form");
+  editingDriverId = driver.id;
+  form.reset();
+  form.elements.name.value = driver.name;
+  form.elements.nationalId.value = driver.nationalId;
+  form.elements.phone.value = driver.phone;
+  form.elements.passportNumber.value = driver.passportNumber || "";
+  $("#driver-submit-button").textContent = "حفظ التعديلات";
+  $("#cancel-driver-edit").classList.remove("hidden");
+  $("#driver-form-wrap").classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelDriverEdit() {
+  editingDriverId = null;
+  $("#driver-form").reset();
+  $("#driver-submit-button").textContent = "حفظ السائق";
+  $("#cancel-driver-edit").classList.add("hidden");
+  $("#driver-form-wrap").classList.add("hidden");
+}
+
+async function deleteSelectedTrucks() {
+  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
+  if (!selected.length) return;
+  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى رحلاتها ووثائقها السابقة محفوظة في الأرشيف.`)) return;
+  try {
+    const result = await apiRequest("/api/trucks/bulk-delete", {
+      method: "POST",
+      body: { ids: selected.map(item => item.id) }
+    });
+    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
+    result.deleted.forEach(id => selectedTruckIds.delete(id));
+    await refreshServerState();
+    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function deleteSelectedDrivers() {
+  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
+  if (!selected.length) return;
+  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
+  try {
+    const result = await apiRequest("/api/drivers/bulk-delete", {
+      method: "POST",
+      body: { ids: selected.map(item => item.id) }
+    });
+    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
+    result.deleted.forEach(id => selectedDriverIds.delete(id));
+    await refreshServerState();
+    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function selectVisibleRecords(type, visibleIds, selected) {
+  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
+  visibleIds.forEach(id => selected ? selectedIds.add(id) : selectedIds.delete(id));
+  updateBulkControls(type, visibleIds);
+}
+
+function clearSelection(type) {
+  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
+  selectedIds.clear();
+  if (type === "trucks") renderFleet();
+  else renderDrivers();
+}
+
+function renderTripExpenses() {
+  const expenses = state.tripExpenses || [];
+  const totalCents = expenses.reduce((sum, expense) => {
+    const amount = Number(expense.amount);
+    return sum + (Number.isFinite(amount) ? Math.round(amount * 100) : 0);
+  }, 0);
+  $("#expense-total").textContent = formatCurrency(totalCents / 100);
+  $("#expense-count").textContent = expenses.length;
+  $("#expense-rows").innerHTML = expenses.length ? expenses.map(expense => `
+    <tr>
+      <td>${escapeHtml(expense.plateNumber)}</td>
+      <td>${escapeHtml(expense.driverName)}</td>
+      <td>${escapeHtml(expense.nationalId)}</td>
+      <td>${escapeHtml(expense.declarationNumber)} · ${escapeHtml(expense.containerNumber)}</td>
+      <td>${formatCurrency(expense.amount)}</td>
+      <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
+      <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${renderAttachmentLinks(expense.attachments, "مرفقات التكلفة") || "—"}</td>
+      <td>${formatDateTime(expense.createdAt)}</td>
+    </tr>`).join("") : `<tr><td colspan="9" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const separator = result.indexOf(",");
+      if (separator < 0) return reject(new Error("تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx."));
+      resolve(result.slice(separator + 1));
+    };
+    reader.onerror = () => reject(reader.error || new Error("تعذر قراءة ملف Excel. ارفع ملفاً صالحاً بصيغة .xlsx."));
+    reader.readAsDataURL(file);
   });
+}
+
+async function importSpreadsheet(type, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const importButton = $(`#import-${type}-button`);
+  if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    input.value = "";
+    return showToast("اختر ملف Excel بصيغة .xlsx.", true);
+  }
+  if (file.size > 3 * 1024 * 1024) {
+    input.value = "";
+    return showToast("حجم ملف Excel يجب ألا يتجاوز 3 MB.", true);
+  }
+  importButton.disabled = true;
+  try {
+    showToast("جارٍ استيراد البيانات...");
+    const data = await readFileAsBase64(file);
+    const result = await apiRequest(`/api/${type}/import`, {
+      method: "POST",
+      body: { fileName: file.name, data }
+    });
+    await refreshServerState();
+    showToast(type === "drivers"
+      ? `تم استيراد ${result.imported} سائقاً بنجاح.`
+      : `تم استيراد ${result.imported} سيارة بنجاح.`);
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    input.value = "";
+    importButton.disabled = false;
+  }
+}
+
+async function downloadImportTemplate(type) {
+  try {
+    const response = await fetch(`/api/import-templates/${type}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(API_ERRORS[payload.error] || `تعذر تنزيل النموذج (${response.status}).`);
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `north-world-${type}-template.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("تم تنزيل نموذج Excel.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderArchive(query = "") {
+  const term = String(query || "").trim().toLowerCase();
+  const matches = [...state.docs].filter(doc => {
+    const truck = truckForTrip(doc);
+    return [doc.documentNumber, doc.declarationNumber, doc.containerNumber, truck?.plateNumber, doc.customerName]
+      .some(value => String(value || "").toLowerCase().includes(term));
+  }).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  $("#archive-count").textContent = `${matches.length} وثيقة`;
+  const container = $("#archive-results");
+  if (!matches.length) {
+    container.innerHTML = `<div class="panel empty-state"><span>▣</span><strong>${term ? "لا توجد وثائق مطابقة" : "الأرشيف فارغ"}</strong><p>${term ? "جرّب البحث برقم مختلف." : "ستظهر الوثائق هنا بعد إصدارها."}</p></div>`;
+    return;
+  }
+  container.innerHTML = matches.map(doc => {
+    const truck = truckForTrip(doc);
+    const driver = driverById(doc.driverId);
+    const status = documentStatus(doc);
+    return `<article class="archive-card">
+      <div><h3>${escapeHtml(documentLabel(doc))}</h3><p>تاريخ الإصدار: ${doc.status === "DRAFT" ? "لم يصدر بعد" : formatDate(doc.issuedAt)}</p></div>
+      <div><span class="status-pill ${status.className}">${status.text}</span><p>${escapeHtml(doc.declarationNumber)}</p></div>
+      <div class="archive-meta">الحاوية: ${escapeHtml(doc.containerNumber)} · اللوحة: ${escapeHtml(truck?.plateNumber || "—")}<br>العميل: ${escapeHtml(doc.customerName)} · السائق: ${escapeHtml(driver?.name || "—")}${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}</div>
+      <div class="archive-actions"><button class="button button-secondary" data-action="pdf" data-id="${escapeHtml(doc.id)}">عرض / PDF</button>${doc.returnedAt ? "" : `<label class="eir-field">رقم إيصال EIR (اختياري)<input type="text" data-return-eir autocomplete="off"></label>`}<button class="button button-light" data-action="return" data-id="${escapeHtml(doc.id)}" ${doc.returnedAt ? "disabled" : ""}>تسجيل الإعادة</button></div>
+    </article>`;
+  }).join("");
+}
+
+function renderTripTracking() {
+  const acceptedTrips = state.docs.filter(doc => Boolean(doc.acceptedAt));
+  const activeTrips = acceptedTrips.filter(doc => !doc.returnedAt);
+  const completedTrips = acceptedTrips.filter(doc => Boolean(doc.returnedAt));
+  $("#tracking-active-count").textContent = activeTrips.length;
+  $("#tracking-completed-count").textContent = completedTrips.length;
+  $("#tracking-last-updated").textContent = formatDateTime(trackingLastUpdatedAt);
+
+  const statusFilter = $("#tracking-filter").value;
+  const query = $("#tracking-query").value.trim().toLocaleLowerCase();
+  const trips = acceptedTrips.filter(doc => {
+    if (statusFilter === "active" && doc.returnedAt) return false;
+    if (statusFilter === "completed" && !doc.returnedAt) return false;
+    const driver = driverById(doc.driverId);
+    const truck = truckForTrip(doc);
+    const searchable = [
+      doc.documentNumber, doc.declarationNumber, doc.containerNumber,
+      doc.customerName, doc.port, doc.destination, driver?.name,
+      driver?.phone, truck?.plateNumber, truck?.fleetNumber
+    ];
+    return !query || searchable.some(value => String(value || "").toLocaleLowerCase().includes(query));
+  }).sort((a, b) => {
+    const aUpdatedAt = a.stageHistory?.[a.stageHistory.length - 1]?.completedAt || a.acceptedAt;
+    const bUpdatedAt = b.stageHistory?.[b.stageHistory.length - 1]?.completedAt || b.acceptedAt;
+    return String(bUpdatedAt).localeCompare(String(aUpdatedAt));
+  });
+
+  const container = $("#tracking-list");
+  if (!trips.length) {
+    container.innerHTML = translateText(`<div class="panel empty-state"><span>⌖</span><strong>لا توجد رحلات مقبولة تطابق البحث أو الفلتر.</strong></div>`);
+    return;
+  }
+
+  container.innerHTML = trips.map(doc => {
+    const driver = driverById(doc.driverId);
+    const truck = truckForTrip(doc);
+    const stageHistory = new Map((doc.stageHistory || []).map(update => [update.stage, update.completedAt]));
+    const currentStageIndex = Number.isInteger(doc.tripStageIndex)
+      ? Math.max(0, Math.min(doc.tripStageIndex, TRIP_STAGES.length - 1))
+      : 0;
+    const completed = Boolean(doc.returnedAt);
+    const currentStage = TRIP_STAGES[currentStageIndex];
+    const lastUpdate = doc.stageHistory?.[doc.stageHistory.length - 1]?.completedAt || doc.acceptedAt;
+    const timeline = TRIP_STAGES.map((stage, index) => {
+      const done = completed || index < currentStageIndex;
+      const current = !completed && index === currentStageIndex;
+      const enteredAt = index === 0
+        ? doc.acceptedAt
+        : stageHistory.get(TRIP_STAGES[index - 1].key);
+      const timestamp = done ? stageHistory.get(stage.key) : current ? enteredAt : null;
+      const marker = done ? "✓" : index + 1;
+      return `<div class="tracking-stage ${done ? "done" : current ? "current" : ""}">
+        <span class="tracking-stage-dot">${marker}</span>
+        <span class="tracking-stage-label">${stage.label}</span>
+        ${timestamp ? `<small>${formatDateTime(timestamp)}</small>` : ""}
+      </div>`;
+    }).join("");
+
+    return `<article class="tracking-card">
+      <div class="tracking-card-heading">
+        <div><h2>${escapeHtml(doc.documentNumber || doc.declarationNumber)}</h2><p>البيان: ${escapeHtml(doc.declarationNumber)} · الحاوية: ${escapeHtml(doc.containerNumber)}</p></div>
+        <span class="status-pill ${completed ? "status-issued" : "status-on-trip"}">${completed ? "مكتملة" : "قيد التنفيذ"}</span>
+      </div>
+      <div class="tracking-details">
+        <div><small>السائق</small><strong>${escapeHtml(driver?.name || "—")}${driver?.phone ? ` · ${escapeHtml(driver.phone)}` : ""}</strong></div>
+        <div><small>الشاحنة / رقم الأسطول</small><strong>${escapeHtml(truck?.plateNumber || "—")} · ${escapeHtml(truck?.fleetNumber || "—")}</strong></div>
+        <div><small>المسار</small><strong>من: ${escapeHtml(doc.port)} · إلى: ${escapeHtml(doc.destination)}</strong></div>
+        <div><small>قُبل الطلب في</small><strong>${formatDateTime(doc.acceptedAt)}</strong></div>
+        <div><small>المرحلة الحالية</small><strong>${completed ? "تم إعادة الفارغ" : currentStage.label}</strong></div>
+        <div><small>آخر تحديث</small><strong>${formatDateTime(lastUpdate)}</strong></div>
+      </div>
+      <div class="tracking-timeline-wrap"><div class="tracking-timeline">${timeline}</div></div>
+    </article>`;
+  }).join("");
+}
+
+async function refreshTracking(showConfirmation = false) {
+  if (trackingRefreshInFlight) return;
+  trackingRefreshInFlight = true;
+  const button = $("#refresh-tracking");
+  button.disabled = true;
+  try {
+    await refreshServerState();
+    if (showConfirmation) showToast("تم تحديث تتبع الرحلات.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    trackingRefreshInFlight = false;
+    button.disabled = false;
+  }
+}
+
+function populatePortFilter() {
+  const select = $("#filter-port");
+  const selectedPort = select.value;
+  select.innerHTML = `<option value="">كل الموانئ</option>` + state.ports
+    .map(port => `<option value="${escapeHtml(port.name)}">${escapeHtml(port.name)}</option>`)
+    .join("");
+  if (state.ports.some(port => port.name === selectedPort)) select.value = selectedPort;
+}
+
+function filteredDocs() {
+  const from = $("#filter-from").value;
+  const to = $("#filter-to").value;
+  const port = $("#filter-port").value;
+  const customer = $("#filter-customer").value.trim().toLowerCase();
+  const status = $("#filter-return").value;
+  return [...state.docs].filter(doc => {
+    return (!from || doc.issuedAt >= from) &&
+      (!to || doc.issuedAt <= to) &&
+      (!port || doc.port === port) &&
+      (!customer || doc.customerName.toLowerCase().includes(customer)) &&
+      (!status || returnState(doc) === status);
+  }).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+function renderReports() {
+  populatePortFilter();
+  const docs = filteredDocs();
+  $("#report-count").textContent = `${docs.length} عملية`;
+  $("#report-empty").classList.toggle("hidden", docs.length > 0);
+  $("#report-rows").innerHTML = docs.map(doc => {
+    const truck = truckForTrip(doc);
+    const driver = driverById(doc.driverId);
+    const returned = returnLabel(doc);
+    const status = documentStatus(doc);
+    return `<tr>
+      <td>العملية: ${formatDate(doc.issuedAt)}<br>الفسح: ${formatDate(clearanceById(doc.clearanceId)?.clearedAt)}</td>
+      <td>${escapeHtml(doc.customerName)}</td>
+      <td>${escapeHtml(driver?.name || "—")}<br>${escapeHtml(driver?.nationalId || "—")}<br>${escapeHtml(driver?.phone || "—")}</td>
+      <td><span class="doc-number">${escapeHtml(doc.documentNumber)}</span><br><span class="status-pill ${status.className}">${status.text}</span></td>
+      <td>${escapeHtml(truck?.plateNumber || "—")}<br>رقم الأسطول: ${escapeHtml(truck?.fleetNumber || "—")}</td>
+      <td>${escapeHtml(doc.containerNumber)}<br>${escapeHtml(doc.size)} · ${CONTAINER_TYPES[doc.type] || "أخرى"}<br>الرصاص: ${escapeHtml(doc.sealNumber || "—")}<br>البيان: ${escapeHtml(doc.declarationNumber)}</td>
+      <td>من: ${escapeHtml(doc.port)}<br>إلى: ${escapeHtml(doc.destination)}</td>
+      <td class="${returned.className}">${returned.text}<br>إيصال EIR: ${escapeHtml(doc.eir || "—")}<br>المهلة المجانية: ${formatDate(doc.freeTimeEndsAt)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function updateAccountRoleFields() {
+  const isDriver = $("#account-role").value === "DRIVER";
+  const field = $("#account-driver-field");
+  const select = $("#account-driver");
+  const selectedDriverId = select.value;
+  field.classList.toggle("hidden", !isDriver);
+  select.required = isDriver;
+  const availableDrivers = state.drivers.filter(driver =>
+    !driver.deletedAt && driver.isActive &&
+    !state.accounts.some(account => account.id !== editingAccountId && account.role === "DRIVER" && account.driverId === driver.id && !account.deletedAt)
+  );
+  select.innerHTML = `<option value="">اختر السائق</option>` + availableDrivers
+    .map(driver => `<option value="${escapeHtml(driver.id)}">${escapeHtml(driver.name)}</option>`)
+    .join("");
+  if (availableDrivers.some(driver => driver.id === selectedDriverId)) select.value = selectedDriverId;
+}
+
+function renderAccounts() {
+  const accounts = state.accounts.filter(account => !account.deletedAt);
+  $("#account-count").textContent = `${accounts.length} حساب`;
+  $("#account-rows").innerHTML = accounts.length ? accounts.map(account => {
+    const driver = account.role === "DRIVER" ? driverById(account.driverId) : null;
+    return `<tr>
+      <td>${escapeHtml(account.username)}</td>
+      <td><span class="status-pill ${account.role === "ADMIN" ? "status-issued" : "status-neutral"}">${account.role === "ADMIN" ? "أدمن" : "سائق"}</span></td>
+      <td>${escapeHtml(driver?.name || (account.role === "ADMIN" ? "—" : "سجل غير مرتبط"))}</td>
+      <td>${formatDate(account.createdAt?.slice(0, 10))}</td>
+      <td><button class="edit-account-button" type="button" data-action="edit-account" data-id="${escapeHtml(account.id)}" aria-label="تعديل حساب ${escapeHtml(account.username)}">تعديل</button></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty-row">لا توجد حسابات مستخدمين.</td></tr>`;
+  updateAccountRoleFields();
+}
+
+function setAccountFormMode(isEditing) {
+  const password = $("#account-form").elements.password;
+  const passwordConfirm = $("#account-form").elements.passwordConfirm;
+  $("#account-form-title").textContent = isEditing ? "تعديل حساب" : "إضافة حساب";
+  $("#account-submit-button").textContent = isEditing ? "حفظ التعديلات" : "إنشاء الحساب";
+  $("#account-form-actions").classList.toggle("editing", isEditing);
+  $("#cancel-account-edit").classList.toggle("hidden", !isEditing);
+  $("#account-password-title").textContent = isEditing ? "كلمة مرور جديدة (اختياري)" : "كلمة المرور";
+  $("#account-password-confirm-title").textContent = isEditing ? "تأكيد كلمة المرور الجديدة" : "تأكيد كلمة المرور";
+  password.required = !isEditing;
+  passwordConfirm.required = !isEditing;
+  password.minLength = isEditing ? 0 : 12;
+  passwordConfirm.minLength = isEditing ? 0 : 12;
+  password.placeholder = isEditing ? "اتركها فارغة للإبقاء على الحالية" : "١٢ حرفاً على الأقل";
+  passwordConfirm.placeholder = isEditing ? "أعد كتابة كلمة المرور الجديدة" : "أعد كتابة كلمة المرور";
+}
+
+function beginAccountEdit(id) {
+  const account = state.accounts.find(item => item.id === id && !item.deletedAt);
+  if (!account) return showToast("تعذر العثور على الحساب المطلوب.", true);
+  const form = $("#account-form");
+  editingAccountId = account.id;
+  form.reset();
+  form.elements.username.value = account.username;
+  $("#account-role").value = account.role;
+  setAccountFormMode(true);
+  updateAccountRoleFields();
+  $("#account-driver").value = account.driverId || "";
+  $("#account-form-title").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelAccountEdit() {
+  editingAccountId = null;
+  $("#account-form").reset();
+  setAccountFormMode(false);
+  renderAccounts();
+}
+
+async function handleAccountSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const editingAccount = editingAccountId ? state.accounts.find(account => account.id === editingAccountId && !account.deletedAt) : null;
+  if (editingAccountId && !editingAccount) {
+    cancelAccountEdit();
+    return showToast("لم يعد الحساب المحدد متاحاً للتعديل.", true);
+  }
+  const username = normalizedUsername(values.username);
+  if (username.length < 3) return showToast("اسم المستخدم يجب أن يتكون من ٣ أحرف على الأقل.", true);
+  if (state.accounts.some(account => account.id !== editingAccount?.id && normalizedUsername(account.username) === username && !account.deletedAt)) {
+    return showToast("اسم المستخدم مستخدم بالفعل.", true);
+  }
+  const changingPassword = Boolean(values.password || values.passwordConfirm);
+  if ((!editingAccount || changingPassword) && values.password.length < 12) return showToast("كلمة المرور يجب ألا تقل عن ١٢ حرفاً.", true);
+  if (changingPassword && values.password !== values.passwordConfirm) return showToast("كلمتا المرور غير متطابقتين.", true);
+  const role = values.role;
+  if (!["ADMIN", "DRIVER"].includes(role)) return showToast("نوع الحساب المحدد غير صحيح.", true);
+  if (editingAccount?.role === "ADMIN" && role !== "ADMIN" && state.accounts.filter(account => account.role === "ADMIN" && !account.deletedAt).length <= 1) {
+    return showToast("لا يمكن تغيير نوع حساب آخر أدمن في النظام.", true);
+  }
+  const driver = role === "DRIVER" ? driverById(values.driverId) : null;
+  if (role === "DRIVER" && (!driver || driver.deletedAt || !driver.isActive)) {
+    return showToast("اختر سجلاً نشطاً لسائق لا يملك حساباً بعد.", true);
+  }
+  if (role === "DRIVER" && state.accounts.some(account => account.id !== editingAccount?.id && account.role === "DRIVER" && account.driverId === driver.id && !account.deletedAt)) {
+    return showToast("لدى هذا السائق حساب مستخدم بالفعل.", true);
+  }
+  try {
+    if (editingAccount) {
+      const wasCurrentUser = currentAccount?.id === editingAccount.id;
+      await apiRequest(`/api/accounts/${encodeURIComponent(editingAccount.id)}`, {
+        method: "PATCH",
+        body: {
+          username,
+          role,
+          driverId: role === "DRIVER" ? driver.id : "",
+          ...(changingPassword ? { password: values.password } : {})
+        }
+      });
+      editingAccountId = null;
+      form.reset();
+      setAccountFormMode(false);
+      if (wasCurrentUser) {
+        await logout();
+        showAuthMessage("تم تحديث الحساب. سجّل الدخول مجدداً.");
+        return;
+      }
+      await refreshServerState();
+      showToast("تم حفظ تعديلات الحساب.");
+      return;
+    }
+    await apiRequest("/api/accounts", {
+      method: "POST",
+      body: { username, password: values.password, role, driverId: driver?.id || "" }
+    });
+    form.reset();
+    setAccountFormMode(false);
+    await refreshServerState();
+    showToast("تم إنشاء الحساب. شارك اسم المستخدم وكلمة المرور مع صاحبه بشكل آمن.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderDriverExpenses(driver) {
+  const acceptedTrips = state.docs.filter(doc => doc.driverId === driver.id && doc.acceptedAt);
+  const select = $("#driver-expense-trip");
+  const selectedTripId = select.value;
+  select.innerHTML = `<option value="">${translateText("اختر الرحلة")}</option>` + acceptedTrips.map(doc => `
+    <option value="${escapeHtml(doc.tripId)}">${escapeHtml(doc.declarationNumber)} — ${escapeHtml(doc.containerNumber)} (${escapeHtml(doc.port)})</option>
+  `).join("");
+  if (acceptedTrips.some(doc => doc.tripId === selectedTripId)) select.value = selectedTripId;
+  select.disabled = acceptedTrips.length === 0;
+  $("#driver-expense-submit").disabled = acceptedTrips.length === 0;
+  $("#driver-expense-trip-hint").textContent = translateText(
+    acceptedTrips.length ? "تظهر الرحلات بعد قبولها." : "لا توجد رحلات مقبولة لإضافة تكلفة."
+  );
+
+  const expenses = (state.tripExpenses || []).filter(expense => expense.driverId === driver.id);
+  $("#driver-expense-rows").innerHTML = expenses.length ? expenses.map(expense => `
+    <tr>
+      <td>${escapeHtml(expense.declarationNumber)} · ${escapeHtml(expense.containerNumber)}</td>
+      <td>${formatCurrency(expense.amount)}</td>
+      <td>${translateText(EXPENSE_TYPE_LABELS[expense.type] || "—")}</td>
+      <td>${escapeHtml(expense.notes || "—")}</td>
+      <td>${renderAttachmentLinks(expense.attachments, "مرفقات التكلفة") || "—"}</td>
+      <td>${formatDateTime(expense.createdAt)}</td>
+    </tr>`).join("") : `<tr><td colspan="6" class="empty-row">${translateText("لا توجد تكاليف مسجلة.")}</td></tr>`;
+}
+
+function renderDriverDashboard() {
+  if (currentAccount?.role !== "DRIVER") return;
+  const driver = driverById(currentAccount.driverId);
+  if (!driver || driver.deletedAt || !driver.isActive) return logout();
+  const docs = state.docs.filter(doc => doc.driverId === driver.id).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  const requests = docs.filter(doc => doc.requestStatus === "PENDING");
+  const trips = docs.filter(doc => doc.requestStatus === "ACCEPTED");
+  const activeDocs = trips.filter(doc => !doc.returnedAt);
+  renderDriverExpenses(driver);
+  $("#driver-stat-total").textContent = docs.length;
+  $("#driver-stat-active").textContent = activeDocs.length;
+  $("#driver-stat-complete").textContent = trips.length - activeDocs.length;
+  $("#driver-request-count").textContent = requests.length;
+  $("#driver-request-list").innerHTML = requests.length ? requests.map(doc => {
+    const truck = truckForTrip(doc);
+    return `<article class="driver-request-card">
+      <div class="driver-request-head"><div><h2>${escapeHtml(documentLabel(doc))}</h2><p>طلب جديد من الإدارة · بانتظار قبولك</p></div><span class="status-pill status-pending">بانتظار القبول</span></div>
+      <div class="driver-request-details">
+        <div><span>العميل</span><strong>${escapeHtml(doc.customerName)}</strong></div>
+        <div><span>الحاوية والمقاس</span><strong>${escapeHtml(doc.containerNumber)} · ${escapeHtml(doc.size)}</strong></div>
+        <div><span>الشاحنة</span><strong>${escapeHtml(truck?.plateNumber || "—")} · ${escapeHtml(truck?.fleetNumber || "—")}</strong></div>
+        <div><span>الميناء ووجهة التسليم</span><strong>${language === "ar" ? `من: ${escapeHtml(doc.port)} إلى: ${escapeHtml(doc.destination)}` : `From: ${escapeHtml(doc.port)} → To: ${escapeHtml(doc.destination)}`}</strong></div>
+        <div><span>موعد إعادة الحاوية</span><strong>${formatDate(doc.returnDueAt)}</strong></div>
+        <div><span>تاريخ الرحلة</span><strong>${formatDate(doc.issuedAt)}</strong></div>
+      </div>
+      ${renderAttachmentLinks(doc.clearanceAttachments, "مرفقات الفسح")}
+      ${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}
+      <div class="driver-trip-actions"><span class="form-note">راجع تفاصيل الرحلة قبل القبول.</span><button class="button button-primary" type="button" data-action="accept-trip" data-id="${escapeHtml(doc.id)}">قبول الطلب وبدء الرحلة</button></div>
+    </article>`;
+  }).join("") : `<div class="driver-empty-state"><strong>لا توجد طلبات جديدة حالياً.</strong><p>ستظهر هنا الرحلات التي يعيّنها لك مدير النظام.</p></div>`;
+
+  $("#driver-trip-list").innerHTML = trips.length ? trips.map(doc => {
+    const truck = truckForTrip(doc);
+    const currentStage = Math.max(0, Math.min(doc.tripStageIndex, TRIP_STAGES.length - 1));
+    const timeline = TRIP_STAGES.map((stage, index) => {
+      const stateClass = index < currentStage ? "done" : index === currentStage ? "current" : "";
+      const marker = index < currentStage ? "✓" : index + 1;
+      return `<div class="driver-timeline-step ${stateClass}"><span class="driver-timeline-dot">${marker}</span><span class="driver-timeline-label">${stage.label}</span></div>`;
+    }).join("");
+    const nextStage = TRIP_STAGES[currentStage];
+    return `<article class="driver-trip-card">
+      <div class="driver-trip-head"><div><h3>${escapeHtml(documentLabel(doc))}</h3><p>${doc.returnedAt ? "الرحلة مكتملة" : `المرحلة الحالية: ${nextStage.label}`}</p></div><span class="status-pill ${doc.returnedAt ? "status-issued" : "status-on-trip"}">${doc.returnedAt ? "مكتملة" : "قيد التنفيذ"}</span></div>
+      <div class="driver-request-details">
+        <div><span>العميل</span><strong>${escapeHtml(doc.customerName)}</strong></div>
+        <div><span>الحاوية والمقاس</span><strong>${escapeHtml(doc.containerNumber)} · ${escapeHtml(doc.size)} · ${CONTAINER_TYPES[doc.type] || "أخرى"}</strong></div>
+        <div><span>الشاحنة</span><strong>${escapeHtml(truck?.plateNumber || "—")}</strong></div>
+        <div><span>الميناء</span><strong>${escapeHtml(doc.port)}</strong></div>
+        <div><span>وجهة العميل</span><strong>${escapeHtml(doc.destination)}</strong></div>
+        <div><span>موعد إعادة الحاوية</span><strong>${formatDate(doc.returnDueAt)}</strong></div>
+      </div>
+      ${renderAttachmentLinks(doc.clearanceAttachments, "مرفقات الفسح")}
+      ${renderAttachmentLinks(doc.attachments, "مرفقات وثيقة النقل")}
+      <div class="driver-timeline-wrap"><div class="driver-timeline">${timeline}</div></div>
+      <div class="driver-trip-actions">
+        <button class="button button-light" type="button" data-action="pdf" data-id="${escapeHtml(doc.id)}">عرض / PDF</button>
+        ${doc.returnedAt
+          ? `<span class="status-pill status-issued">الرحلة مكتملة${doc.eir ? ` · EIR: ${escapeHtml(doc.eir)}` : ""}</span>`
+          : currentStage === TRIP_STAGES.length - 2
+            ? `<label class="eir-field">رقم إيصال التسليم EIR (اختياري)<input type="text" data-eir-value autocomplete="off"></label><button class="button button-primary" type="button" data-action="complete-trip" data-id="${escapeHtml(doc.id)}">${nextStage.action}</button>`
+            : `<button class="button button-primary" type="button" data-action="advance-trip" data-id="${escapeHtml(doc.id)}">${nextStage.action}</button>`}
+      </div>
+    </article>`;
+  }).join("") : `<div class="driver-empty-state"><strong>لا توجد رحلات مرتبطة بحسابك حالياً.</strong><p>بعد قبول الطلب ستظهر مراحل الرحلة هنا.</p></div>`;
+  showDriverTab(activeDriverTab);
+}
+
+async function acceptDriverTrip(id) {
+  const doc = state.docs.find(item => item.id === id);
+  if (!doc || currentAccount?.role !== "DRIVER" || doc.driverId !== currentAccount.driverId || doc.requestStatus !== "PENDING") {
+    return showToast("لا يمكن قبول طلب غير مخصص لحسابك.", true);
+  }
+  try {
+    await apiRequest(`/api/trips/${encodeURIComponent(doc.tripId)}/accept`, { method: "POST" });
+    activeDriverTab = "trips";
+    await refreshServerState();
+    showToast("تم قبول الرحلة. ابدأ التوجه إلى الميناء.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function advanceDriverTrip(id, eirValue = "") {
+  const doc = state.docs.find(item => item.id === id);
+  if (!doc || currentAccount?.role !== "DRIVER" || doc.driverId !== currentAccount.driverId || doc.requestStatus !== "ACCEPTED" || doc.returnedAt) {
+    return showToast("لا يمكن تحديث مرحلة هذه الرحلة.", true);
+  }
+  const currentStage = Number.isInteger(doc.tripStageIndex) ? doc.tripStageIndex : 0;
+  if (currentStage < 0 || currentStage >= TRIP_STAGES.length - 1) return showToast("لا يمكن تحديث مرحلة هذه الرحلة.", true);
+  try {
+    await apiRequest(`/api/trips/${encodeURIComponent(doc.tripId)}/advance`, {
+      method: "POST",
+      body: { eir: String(eirValue).trim() }
+    });
+    await refreshServerState();
+    showToast(currentStage === TRIP_STAGES.length - 2
+      ? "تم تسجيل إعادة الفارغ وإكمال الرحلة."
+      : "تم تحديث مرحلة الرحلة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function extractTransportDocumentReference(input) {
+  const requestId = ++transportReferenceExtractionSequence;
+  const status = $("#transport-document-extraction-status");
+  const selectedFiles = Array.from(input.files || []);
+  const pdfFiles = selectedFiles.filter(file =>
+    file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+  );
+  if (!pdfFiles.length) {
+    transportReferenceExtractionInFlight = false;
+    status.classList.add("hidden");
+    status.textContent = "";
+    return;
+  }
+
+  const numberInput = $("#issue-manual-document-number");
+  const dateInput = $("#issue-manual-document-date");
+  const originalNumber = numberInput.value;
+  const originalDate = dateInput.value;
+  transportReferenceExtractionInFlight = true;
+  status.textContent = translateText("جارٍ قراءة مستند النقل واستخراج المرجع...");
+  status.classList.remove("hidden");
+  try {
+    const attachments = await encodeSelectedAttachments(input);
+    if (requestId !== transportReferenceExtractionSequence) return;
+
+    let extractedReference = null;
+    let partialReference = null;
+    let lastError = null;
+    let completedPreview = false;
+    for (const file of attachments.filter(attachment => attachment.type === "application/pdf")) {
+      try {
+        const reference = await apiRequest("/api/trips/document-reference/preview", {
+          method: "POST",
+          body: { fileName: file.name, data: file.data }
+        });
+        completedPreview = true;
+        if (reference.documentNumber && reference.documentDate) {
+          extractedReference = reference;
+          break;
+        }
+        if ((reference.documentNumber || reference.documentDate) && !partialReference) {
+          partialReference = reference;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      if (requestId !== transportReferenceExtractionSequence) return;
+    }
+
+    const reference = extractedReference || partialReference;
+    if (!reference) {
+      const message = lastError && !completedPreview
+        ? lastError.message
+        : "لم يتم العثور على رقم الوثيقة أو تاريخها في ملفات PDF. أدخلهما يدوياً.";
+      status.textContent = translateText(message);
+      showToast(message, true);
+      return;
+    }
+
+    if (reference.documentNumber && numberInput.value === originalNumber) {
+      numberInput.value = reference.documentNumber;
+    }
+    if (reference.documentDate && dateInput.value === originalDate) {
+      dateInput.value = reference.documentDate;
+    }
+
+    const complete = Boolean(reference.documentNumber && reference.documentDate);
+    const message = complete
+      ? "تم استخراج رقم الوثيقة وتاريخها من PDF. راجعهما قبل الحفظ."
+      : "تم استخراج جزء من مرجع الوثيقة. أكمل الخانة الناقصة يدوياً.";
+    status.textContent = translateText(message);
+    showToast(message, !complete);
+  } catch (error) {
+    if (requestId !== transportReferenceExtractionSequence) return;
+    status.textContent = translateText(error.message);
+    showToast(error.message, true);
+  } finally {
+    if (requestId === transportReferenceExtractionSequence) {
+      transportReferenceExtractionInFlight = false;
+    }
+  }
+}
+
+async function issueDocument(event) {
+  event.preventDefault();
+  if (transportReferenceExtractionInFlight) {
+    return showToast("انتظر انتهاء قراءة PDF قبل حفظ الرحلة.", true);
+  }
+  const clearance = clearanceById($("#issue-clearance").value);
+  const truck = truckById($("#issue-truck").value);
+  const driver = driverById($("#issue-driver").value);
+  const customerName = $("#issue-customer").value.trim();
+  const destination = $("#issue-destination").value.trim();
+  const manualDocumentNumber = $("#issue-manual-document-number").value.trim();
+  const manualDocumentDate = $("#issue-manual-document-date").value;
+  if (!clearance || clearance.status !== "CLEARED") return showToast("اختر بياناً جمركياً مفسوحاً أولاً.", true);
+  if (state.docs.some(doc => doc.clearanceId === clearance.id)) return showToast("سبق إصدار وثيقة لهذا البيان.", true);
+  if (!truck || truck.status !== "AVAILABLE") return showToast("اختر شاحنة متاحة.", true);
+  if (!driver || !driver.isActive) return showToast("اختر سائقاً نشطاً.", true);
+  if (!state.accounts.some(account => account.role === "DRIVER" && account.driverId === driver.id && !account.deletedAt)) {
+    return showToast("أنشئ حساباً للسائق المحدد قبل تعيين رحلة له.", true);
+  }
+  if (!customerName || !destination) return showToast("أكمل اسم الشركة ووجهة التسليم.", true);
+  if (Boolean(manualDocumentNumber) !== Boolean(manualDocumentDate)) {
+    return showToast("أدخل رقم الوثيقة وتاريخها معاً أو اتركهما فارغين.", true);
+  }
+  try {
+    const attachments = await encodeSelectedAttachments($("#transport-attachments"));
+    await apiRequest("/api/trips", {
+      method: "POST",
+      body: {
+        clearanceId: clearance.id,
+        truckId: truck.id,
+        driverId: driver.id,
+        customerName,
+        destination,
+        returnDueAt: $("#issue-return-date").value || "",
+        clientRate: $("#issue-client-rate")?.value.trim() || "",
+        driverFee: $("#issue-driver-fee")?.value.trim() || "",
+        manualDocumentNumber,
+        manualDocumentDate,
+        attachments
+      }
+    });
+    $("#issue-form").reset();
+    $("#selected-clearance").classList.add("hidden");
+    await refreshServerState();
+    showToast(manualDocumentNumber
+      ? "تم حفظ الرحلة ومرجع وثيقة النقل؛ لم يصدر النظام الوثيقة."
+      : "تم إنشاء طلب الرحلة بدون رقم وثيقة.");
+    switchView("dashboard");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function recordReturn(id, eirValue = "") {
+  const doc = state.docs.find(item => item.id === id);
+  if (!doc || doc.returnedAt) return;
+  try {
+    await apiRequest(`/api/trips/${encodeURIComponent(doc.tripId)}/return`, {
+      method: "POST",
+      body: { eir: String(eirValue).trim() }
+    });
+    await refreshServerState();
+    showToast("تم تسجيل عودة الحاوية وتحديث حالة الشاحنة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function printDocument(id) {
+  const doc = state.docs.find(item => item.id === id);
+  if (!doc) return showToast("تعذر العثور على الوثيقة.", true);
+  const truck = truckForTrip(doc);
+  const driver = driverById(doc.driverId);
+  const isDraft = doc.status === "DRAFT";
+  if (!isDraft) {
+    return showToast(doc.source === "MANUAL_ENTRY"
+      ? "هذه الوثيقة مسجلة يدوياً ولا توجد لها نسخة PDF مرفقة."
+      : "تنزيل PDF الرسمي غير متاح قبل إعداد موصل المنصة المعتمد.", true);
+  }
+  const documentTitle = doc.documentNumber || "مسودة رحلة";
+  let content = `
+    <!doctype html><html lang="${language}" dir="${language === "ar" ? "rtl" : "ltr"}"><head><meta charset="utf-8"><title>${escapeHtml(documentTitle)}</title>
+    <style>
+      body{font-family:Tahoma,Arial,sans-serif;color:#17283d;margin:0;padding:40px;direction:${language === "ar" ? "rtl" : "ltr"}}
+      .sheet{max-width:820px;margin:auto;border:1px solid #dfe6ed;padding:34px}
+      header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #187b69;padding-bottom:18px}
+      h1{font-size:23px;margin:0 0 6px}p{margin:5px 0;color:#637487;font-size:13px}
+      .mark{color:#168b73;font-size:23px;font-weight:bold}.ref{color:#2477b6;font-size:15px;font-weight:bold}
+      h2{font-size:15px;margin:25px 0 10px}.grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e6ebf0}
+      .item{padding:12px;border-bottom:1px solid #e6ebf0}.item:nth-child(odd){border-${language === "ar" ? "left" : "right"}:1px solid #e6ebf0}
+      small{display:block;color:#8391a0;margin-bottom:6px}strong{font-size:13px}
+      .notice{margin-top:24px;padding:12px;background:#f3f8f6;color:#517767;font-size:11px}
+      footer{margin-top:40px;display:flex;justify-content:space-between;color:#8090a0;font-size:11px}
+      @media print{body{padding:0}.sheet{border:0}}
+    </style></head><body><main class="sheet">
+      <header><div><h1>ملخص رحلة داخلي</h1><p>مسودة داخلية — غير صادرة من منصة حكومية</p></div><div class="ref">${escapeHtml(doc.documentNumber || "مسودة")}</div></header>
+      <h2>بيانات الوثيقة والبيان الجمركي</h2><div class="grid">
+        <div class="item"><small>رقم البيان الجمركي</small><strong>${escapeHtml(doc.declarationNumber)}</strong></div>
+        <div class="item"><small>تاريخ الإصدار</small><strong>${formatDate(doc.issuedAt)}</strong></div>
+        <div class="item"><small>رقم الحاوية</small><strong>${escapeHtml(doc.containerNumber)}</strong></div>
+        <div class="item"><small>المقاس والنوع</small><strong>${escapeHtml(doc.size)} · ${CONTAINER_TYPES[doc.type] || "أخرى"}</strong></div>
+        <div class="item"><small>رقم الرصاص الملاحي</small><strong>${escapeHtml(doc.sealNumber || "—")}</strong></div>
+        <div class="item"><small>اسم الباخرة</small><strong>${escapeHtml(doc.vesselName || "—")}</strong></div>
+      </div>
+      <h2>بيانات الرحلة</h2><div class="grid">
+        <div class="item"><small>الميناء</small><strong>${escapeHtml(doc.port)}</strong></div>
+        <div class="item"><small>وجهة التسليم</small><strong>${escapeHtml(doc.destination)}</strong></div>
+        <div class="item"><small>الشركة المستلمة</small><strong>${escapeHtml(doc.customerName)}</strong></div>
+        <div class="item"><small>الشاحنة / رقم الأسطول</small><strong>${escapeHtml(truck?.plateNumber || "—")} · ${escapeHtml(truck?.fleetNumber || "—")}</strong></div>
+        <div class="item"><small>السائق</small><strong>${escapeHtml(driver?.name || "—")} · ${escapeHtml(driver?.phone || "—")}</strong></div>
+        <div class="item"><small>موعد إعادة الفارغ</small><strong>${formatDate(doc.returnDueAt)}</strong></div>
+      </div>
+      <div class="notice">ملخص داخلي للرحلة فقط، ولا يُعد تصريحاً أو وثيقة صادرة من منصة حكومية.</div>
+      <footer><span>عَالَمُ الشَّمَالِ لإدارة النقل</span><span>تاريخ الطباعة: ${formatDate(dateOnly())}</span></footer>
+    </main><script>window.onload=function(){window.print()}<\/script></body></html>`;
+  content = translateText(content);
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return showToast("اسمح بالنوافذ المنبثقة لعرض نسخة الطباعة.", true);
+  printWindow.document.open();
+  printWindow.document.write(content);
+  printWindow.document.close();
+}
+
+async function exportExcel() {
+  const params = new URLSearchParams();
+  const from = $("#filter-from").value;
+  const to = $("#filter-to").value;
+  const port = $("#filter-port").value;
+  const customer = $("#filter-customer").value.trim();
+  const returnStatus = $("#filter-return").value;
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  if (port) params.set("port", port);
+  if (customer) params.set("customer", customer);
+  if (returnStatus) params.set("returnStatus", returnStatus);
+
+  try {
+    const response = await fetch(`/api/reports.xlsx?${params}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(API_ERRORS[payload.error] || `تعذر تصدير التقرير (${response.status}).`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `north-world-report-${dateOnly()}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("تم تصدير التقرير من الخادم.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function exportClearancesExcel() {
+  const query = $("#fasah-query").value.trim();
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  try {
+    const response = await fetch(`/api/clearances.xlsx?${params}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(API_ERRORS[payload.error] || `تعذر تصدير بيانات الفسح (${response.status}).`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `north-world-clearances-${dateOnly()}.xlsx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("تم تصدير بيانات الفسح إلى Excel.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function handleTruckSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  if (!driverById(values.driverId)?.isActive) return showToast("اختر سائقاً نشطاً للسيارة.", true);
+  const currentTruck = editingTruckId ? truckById(editingTruckId) : null;
+  const identityFields = ["fleetNumber", "plateNumber", "serialNumber"];
+  const duplicate = state.trucks.some(item => item.id !== editingTruckId && identityFields.some(field => {
+    const submittedValue = values[field].trim().toLowerCase();
+    const unchanged = currentTruck && submittedValue === currentTruck[field].toLowerCase();
+    return !unchanged &&
+      (currentTruck || !item.deletedAt) &&
+      item[field].toLowerCase() === submittedValue;
+  }));
+  if (duplicate) {
+    return showToast(editingTruckId ? "بيانات الشاحنة مسجلة مسبقاً." : "رقم الأسطول أو اللوحة أو الرقم التسلسلي مسجل مسبقاً.", true);
+  }
+  try {
+    const editingTruck = Boolean(editingTruckId);
+    await apiRequest(editingTruck ? `/api/trucks/${encodeURIComponent(editingTruckId)}` : "/api/trucks", {
+      method: editingTruck ? "PATCH" : "POST",
+      body: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
+    });
+    await refreshServerState();
+    if (editingTruck) {
+      cancelTruckEdit();
+      showToast("تم تحديث بيانات الشاحنة.");
+    } else {
+      form.reset();
+      $("#truck-form-wrap").classList.add("hidden");
+      showToast("تمت إضافة الشاحنة.");
+    }
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function handleClearanceSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const isEditing = Boolean(editingClearanceId);
+  const clearanceId = editingClearanceId;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const appointment = pendingFasahAppointmentId
+    ? (state.fasahAppointments || []).find(item => item.id === pendingFasahAppointmentId)
+    : null;
+  const appointmentMatchesClearance = Boolean(appointment &&
+    appointmentDeclarationNumber(appointment).trim() === values.declarationNumber.trim() &&
+    normalizeContainerNumber(appointmentContainerNumber(appointment)) === normalizeContainerNumber(values.containerNumber));
+  const matchedAppointment = appointmentMatchesClearance ? appointment : null;
+  if (matchedAppointment && values.status !== "CLEARED") {
+    return showToast("لا يمكن استخدام بيانات الموعد لإصدار رحلة قبل تأكيد حالة الفسح.", true);
+  }
+  if (values.status === "CLEARED" && !$("#clearance-confirmed").checked) {
+    return showToast("أكد حالة الفسح وتاريخه من مستند رسمي قبل الحفظ.", true);
+  }
+  if (values.status === "CLEARED" && !values.clearedAt) {
+    return showToast("أدخل تاريخ الفسح للحاوية المفسوحة.", true);
+  }
+  try {
+    const attachments = await encodeSelectedAttachments($("#clearance-attachments"));
+    const clearance = await apiRequest(
+      isEditing ? `/api/clearances/${encodeURIComponent(clearanceId)}` : "/api/clearances/manual",
+      {
+        method: isEditing ? "PATCH" : "POST",
+        body: { ...values, clearanceConfirmed: $("#clearance-confirmed").checked, attachments }
+      }
+    );
+    editingClearanceId = null;
+    pendingFasahAppointmentId = null;
+    form.reset();
+    $("#clearance-declaration-field").classList.remove("hidden");
+    $("#clearance-submit-button").textContent = translateText("إضافة بيانات الفسح");
+    $("#cancel-clearance-edit").classList.add("hidden");
+    updateClearancePortCity();
+    updateClearanceConfirmation();
+    $("#clearance-form-wrap").classList.add("hidden");
+    await refreshServerState();
+    $("#fasah-query").value = clearance.declarationNumber;
+    await renderFasahResults(clearance.declarationNumber);
+    if (matchedAppointment && clearance.status === "CLEARED") {
+      switchView("issue");
+      resetAppointmentIssueContext();
+      populateIssueOptions(clearance.id);
+      $("#issue-clearance").value = clearance.id;
+      renderSelectedClearance();
+      const driverMatch = matchIssueDriverFromAppointment(matchedAppointment);
+      if (driverMatch === "matched") showToast("تم حفظ بيانات الحاوية من الموعد، ومطابقة جوال السائق.");
+      else if (driverMatch === "no_available_truck") showToast("تم مطابقة السائق، لكن لا توجد شاحنة متاحة مرتبطة به.", true);
+      else showToast("رقم جوال التذكرة لا يطابق سائقاً نشطاً واحداً لديه حساب في النظام.", true);
+      return;
+    }
+    showToast(isEditing
+      ? "تم تحديث بيانات الفسح."
+      : "تم حفظ بيانات الفسح اليدوية. لم يتم التحقق منها لدى منصة فسح.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function handleFasahPdfPreview(event) {
+  event.preventDefault();
+  const fileInput = $("#fasah-appointment-file");
+  const extractButton = $("#fasah-pdf-extract-button");
+  extractButton.disabled = true;
+  try {
+    const [file] = await encodeSelectedAttachments(fileInput);
+    if (!file || file.type !== "application/pdf") throw new Error(translateText("اختر ملف PDF صحيحاً."));
+    const result = await apiRequest("/api/fasah/appointments/preview", {
+      method: "POST",
+      body: { fileName: file.name, data: file.data }
+    });
+    latestFasahPdfExtraction = {
+      fields: result.fields || {},
+      extractedAt: Date.now(),
+      appointmentId: null
+    };
+    const form = $("#fasah-appointment-review-form");
+    for (const [key, value] of Object.entries(result.fields || {})) {
+      const input = form.elements.namedItem(key);
+      if (input && typeof value === "string") input.value = value;
+    }
+    const clearanceFieldsComplete = fillClearanceFormFromAppointment(result.fields || {});
+    fileInput.disabled = true;
+    form.classList.remove("hidden");
+    const message = $("#fasah-pdf-message");
+    message.textContent = result.fields?.missingFields?.length || !clearanceFieldsComplete
+      ? translateText("بعض الحقول الأساسية لم تُستخرج. أكملها يدوياً قبل الحفظ.")
+      : translateText("تم استخراج البيانات؛ راجعها ثم احفظ السجل.");
+    message.classList.remove("hidden");
+    if (clearanceFieldsComplete) {
+      showToast("تم ملء البيان والحاوية واسم الميناء وتاريخ الموعد من PDF. المقاس افتراضياً 40 قدم؛ أدخل نوع الحاوية وراجع التاريخ وفق إثبات الفسح الرسمي.");
+    }
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    extractButton.disabled = false;
+  }
+}
+
+async function handleFasahAppointmentSave(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const saveButton = $("#fasah-appointment-save");
+  saveButton.disabled = true;
+  try {
+    const attachments = await encodeSelectedAttachments($("#fasah-appointment-file"));
+    if (attachments.length !== 1 || attachments[0].type !== "application/pdf") {
+      throw new Error(translateText("ارفع ملف PDF لتذكرة الموعد."));
+    }
+    const values = Object.fromEntries(new FormData(form).entries());
+    const appointment = await apiRequest("/api/fasah/appointments", {
+      method: "POST",
+      body: { ...values, attachments }
+    });
+    latestFasahPdfExtraction = {
+      fields: appointment,
+      extractedAt: Date.parse(appointment.createdAt) || Date.now(),
+      appointmentId: appointment.id
+    };
+    $("#fasah-pdf-extract-form").reset();
+    $("#fasah-appointment-file").disabled = false;
+    form.reset();
+    form.classList.add("hidden");
+    $("#fasah-pdf-message").classList.add("hidden");
+    await refreshServerState();
+    $("#fasah-query").value = appointment.bookingReferenceNumber;
+    await renderFasahResults(appointment.bookingReferenceNumber);
+    const containerNumber = appointmentContainerNumber(appointment);
+    const hasExistingClearance = Boolean(containerNumber) && state.clearances.some(item =>
+      normalizeContainerNumber(item.containerNumber) === normalizeContainerNumber(containerNumber)
+    );
+    const clearanceFieldsComplete = !hasExistingClearance &&
+      fillClearanceFormFromAppointment(appointment, appointment.id, false);
+    showToast(clearanceFieldsComplete
+      ? "تم حفظ موعد فسح مع ملف PDF، وتم تعبئة نموذج الفسح تلقائياً."
+      : "تم حفظ موعد فسح مع ملف PDF. هذه بيانات التذكرة وليست تأكيداً لحالة الفسح.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    saveButton.disabled = false;
+  }
+}
+
+function cancelFasahAppointmentPreview() {
+  if (latestFasahPdfExtraction && !latestFasahPdfExtraction.appointmentId) {
+    latestFasahPdfExtraction = null;
+  }
+  $("#fasah-pdf-extract-form").reset();
+  $("#fasah-appointment-review-form").reset();
+  $("#fasah-appointment-review-form").classList.add("hidden");
+  $("#fasah-appointment-file").disabled = false;
+  $("#fasah-pdf-message").classList.add("hidden");
+}
+
+async function handleDriverSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  if (state.drivers.some(item => !item.deletedAt && item.id !== editingDriverId && (
+    item.nationalId.toLowerCase() === values.nationalId.trim().toLowerCase() ||
+    (item.passportNumber || "").toLowerCase() === values.passportNumber.trim().toLowerCase()
+  ))) {
+    return showToast(editingDriverId ? "بيانات السائق مسجلة مسبقاً." : "رقم الهوية أو جواز السفر مسجل مسبقاً.", true);
+  }
+  try {
+    const editingDriver = Boolean(editingDriverId);
+    await apiRequest(editingDriver ? `/api/drivers/${encodeURIComponent(editingDriverId)}` : "/api/drivers", {
+      method: editingDriver ? "PATCH" : "POST",
+      body: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
+    });
+    await refreshServerState();
+    if (editingDriver) {
+      cancelDriverEdit();
+      showToast("تم تحديث بيانات السائق.");
+    } else {
+      form.reset();
+      $("#driver-form-wrap").classList.add("hidden");
+      showToast("تمت إضافة السائق.");
+    }
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function handleTripExpenseSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const trip = state.docs.find(doc =>
+    doc.tripId === values.tripId &&
+    doc.driverId === currentAccount?.driverId &&
+    doc.acceptedAt
+  );
+  if (!trip) return showToast("لا يمكن إضافة تكلفة لهذه الرحلة.", true);
+
+  try {
+    const attachments = await encodeSelectedAttachments($("#trip-expense-attachments"));
+    await apiRequest("/api/trip-expenses", {
+      method: "POST",
+      body: {
+        tripId: trip.tripId,
+        amount: values.amount.trim(),
+        type: values.type,
+        notes: values.notes.trim(),
+        attachments
+      }
+    });
+    form.reset();
+    await refreshServerState();
+    showToast("تم تسجيل التكلفة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function clearReportFilters() {
+  $("#filter-from").value = "";
+  $("#filter-to").value = "";
+  $("#filter-port").value = "";
+  $("#filter-customer").value = "";
+  $("#filter-return").value = "";
+  renderReports();
+}
+
+// ==========================================
+// TARIFFS, DOMESTIC TRIPS & INVOICES MODULE
+// ==========================================
+
+function populateCustomerDatalist() {
+  const datalist = $("#customer-list");
+  if (!datalist) return;
+  const customers = new Set();
+  (state.customers || []).forEach(c => c.name && customers.add(c.name));
+  (state.docs || []).forEach(d => d.customerName && customers.add(d.customerName));
+  (state.tariffs || []).forEach(t => t.customerName && customers.add(t.customerName));
+  datalist.innerHTML = Array.from(customers).sort().map(name => `<option value="${escapeHtml(name)}">`).join("");
+}
+
+function findMatchingTariff(customerName, origin, destination) {
+  if (!customerName || !destination) return null;
+  const cName = customerName.trim().toLowerCase();
+  const dest = destination.trim().toLowerCase();
+  const orig = (origin || "").trim().toLowerCase();
+
+  return (state.tariffs || []).find(t => {
+    const matchCust = (t.customerName || "").toLowerCase() === cName;
+    const matchDest = (t.destination || "").toLowerCase().includes(dest) || dest.includes((t.destination || "").toLowerCase());
+    const matchOrig = !orig || (t.origin || "").toLowerCase().includes(orig) || orig.includes((t.origin || "").toLowerCase());
+    return matchCust && matchDest && matchOrig;
+  }) || (state.tariffs || []).find(t => {
+    const matchCust = (t.customerName || "").toLowerCase() === cName;
+    const matchDest = (t.destination || "").toLowerCase().includes(dest) || dest.includes((t.destination || "").toLowerCase());
+    return matchCust && matchDest;
+  });
+}
+
+function autoLookupDomesticTariff() {
+  const customer = $("#domestic-customer")?.value.trim();
+  const origin = $("#domestic-origin")?.value.trim();
+  const destination = $("#domestic-destination")?.value.trim();
+  const tariff = findMatchingTariff(customer, origin, destination);
+  if (tariff) {
+    if ($("#domestic-client-rate")) $("#domestic-client-rate").value = tariff.price;
+    if ($("#domestic-driver-fee") && tariff.driverCost) $("#domestic-driver-fee").value = tariff.driverCost;
+  }
+}
+
+function autoLookupIssueTariff() {
+  const customer = $("#issue-customer")?.value.trim();
+  const destination = $("#issue-destination")?.value.trim();
+  const clearance = clearanceById($("#issue-clearance")?.value);
+  const origin = clearance?.port?.name || "";
+  const tariff = findMatchingTariff(customer, origin, destination);
+  if (tariff) {
+    if ($("#issue-client-rate")) $("#issue-client-rate").value = tariff.price;
+    if ($("#issue-driver-fee") && tariff.driverCost) $("#issue-driver-fee").value = tariff.driverCost;
+  }
+}
+
+function populateDomesticOptions() {
+  const truckSelect = $("#domestic-truck");
+  const driverSelect = $("#domestic-driver");
+  if (!truckSelect || !driverSelect) return;
+
+  const currentTruck = truckSelect.value;
+  const currentDriver = driverSelect.value;
+
+  truckSelect.innerHTML = `<option value="">${translateText("اختر الشاحنة")}</option>` +
+    state.trucks
+      .filter(truck => !truck.deletedAt && (truck.status === "AVAILABLE" || truck.id === currentTruck))
+      .map(truck => {
+        const assignedDriver = driverById(truck.driverId);
+        const extra = assignedDriver ? ` (${assignedDriver.name})` : "";
+        return `<option value="${escapeHtml(truck.id)}">${escapeHtml(truck.plateNumber)} — ${escapeHtml(truck.fleetNumber)}${extra}</option>`;
+      }).join("");
+
+  driverSelect.innerHTML = `<option value="">${translateText("اختر السائق")}</option>` +
+    state.drivers
+      .filter(driver => !driver.deletedAt && driver.isActive)
+      .map(driver => `<option value="${escapeHtml(driver.id)}">${escapeHtml(driver.name)} (${escapeHtml(driver.phone)})</option>`)
+      .join("");
+
+  if (currentTruck) truckSelect.value = currentTruck;
+  if (currentDriver) driverSelect.value = currentDriver;
+
+  if ($("#domestic-doc-date") && !$("#domestic-doc-date").value) {
+    $("#domestic-doc-date").value = dateOnly();
+  }
+}
+
+function syncDomesticTruckDriver(source) {
+  if (source === "driver") {
+    const driverId = $("#domestic-driver")?.value;
+    if (!driverId) return;
+    const truck = state.trucks.find(t => t.driverId === driverId && t.status === "AVAILABLE" && !t.deletedAt);
+    if (truck && $("#domestic-truck")) $("#domestic-truck").value = truck.id;
+  } else if (source === "truck") {
+    const truckId = $("#domestic-truck")?.value;
+    if (!truckId) return;
+    const truck = truckById(truckId);
+    if (truck && truck.driverId && $("#domestic-driver")) $("#domestic-driver").value = truck.driverId;
+  }
+}
+
+function renderDomesticTrips(query = "") {
+  const tbody = $("#domestic-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#domestic-filter")?.value ?? "").trim().toLowerCase();
+
+  const domesticDocs = state.docs.filter(doc => doc.tripType === "DOMESTIC");
+  const filtered = domesticDocs.filter(doc => {
+    if (!q) return true;
+    return (
+      (doc.customerName || "").toLowerCase().includes(q) ||
+      (doc.origin || "").toLowerCase().includes(q) ||
+      (doc.destination || "").toLowerCase().includes(q) ||
+      (doc.documentNumber || "").toLowerCase().includes(q) ||
+      (doc.cargoDescription || "").toLowerCase().includes(q) ||
+      (doc.truckPlateNumber || "").toLowerCase().includes(q) ||
+      (doc.cargoWaybillNumber || "").toLowerCase().includes(q)
+    );
+  });
+
+  if ($("#domestic-count")) $("#domestic-count").textContent = domesticDocs.length;
+  if ($("#domestic-empty")) $("#domestic-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(doc => {
+    const driver = driverById(doc.driverId);
+    const driverName = driver ? driver.name : "—";
+    const driverStatusClass = doc.requestStatus === "ACCEPTED" ? "status-issued" : "status-pending";
+    const driverStatusText = doc.requestStatus === "ACCEPTED" ? "مقبولة من السائق" : "بانتظار قبول السائق";
+    const billingPill = doc.billingStatus === "PAID"
+      ? `<span class="status-pill status-paid">${translateText("مسددة")}</span>`
+      : doc.billingStatus === "INVOICED"
+      ? `<span class="status-pill status-invoiced">${translateText("مفوترة")} (${escapeHtml(doc.invoiceNumber || "")})</span>`
+      : `<span class="status-pill status-unbilled">${translateText("غير مفوترة")}</span>`;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(doc.documentNumber || doc.cargoWaybillNumber || "—")}</strong></td>
+        <td>${escapeHtml(doc.customerName || "—")}</td>
+        <td><span class="route-badge">${escapeHtml(doc.origin || "—")} ← ${escapeHtml(doc.destination || "—")}</span></td>
+        <td>${escapeHtml(doc.cargoDescription || "بضائع عامة")}</td>
+        <td>${escapeHtml(driverName)}<br><small class="plate-text">${escapeHtml(doc.truckPlateNumber || "")}</small></td>
+        <td><strong>${doc.clientRate ? `${Number(doc.clientRate).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : "—"}</strong></td>
+        <td><span class="status-pill ${driverStatusClass}">${translateText(driverStatusText)}</span></td>
+        <td>${billingPill}</td>
+        <td>${formatDate(doc.issuedAt)}</td>
+        <td>
+          <button class="icon-button" data-action="archive" data-id="${escapeHtml(doc.id)}" title="${translateText("عرض في الأرشيف")}">▣</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function handleDomesticTripSubmit(event) {
+  event.preventDefault();
+  const customerName = $("#domestic-customer")?.value.trim();
+  const origin = $("#domestic-origin")?.value.trim();
+  const destination = $("#domestic-destination")?.value.trim();
+  const driverId = $("#domestic-driver")?.value;
+  const truckId = $("#domestic-truck")?.value;
+  const manualDocumentDate = $("#domestic-doc-date")?.value || dateOnly();
+  const clientRate = $("#domestic-client-rate")?.value.trim() || "";
+  const driverFee = $("#domestic-driver-fee")?.value.trim() || "";
+  const cargoDescription = $("#domestic-cargo")?.value.trim() || "";
+  const cargoWaybillNumber = $("#domestic-waybill")?.value.trim() || "";
+  const manualDocumentNumber = $("#domestic-doc-number")?.value.trim() || "";
+
+  if (!customerName || !origin || !destination) {
+    return showToast("أكمل اسم الشركة وموقعي التحميل والتسليم.", true);
+  }
+  if (!truckId) return showToast("اختر شاحنة متاحة.", true);
+  if (!driverId) return showToast("اختر سائقاً نشطاً.", true);
+
+  const driver = driverById(driverId);
+  if (!driver || !driver.isActive) return showToast("اختر سائقاً نشطاً.", true);
+  if (!state.accounts.some(account => account.role === "DRIVER" && account.driverId === driver.id && !account.deletedAt)) {
+    return showToast("أنشئ حساباً للسائق المحدد قبل تعيين رحلة له.", true);
+  }
+
+  try {
+    const attachments = await encodeSelectedAttachments($("#domestic-attachments"));
+    await apiRequest("/api/trips/domestic", {
+      method: "POST",
+      body: {
+        customerName,
+        origin,
+        destination,
+        truckId,
+        driverId,
+        clientRate,
+        driverFee,
+        cargoDescription,
+        cargoWaybillNumber,
+        manualDocumentNumber,
+        manualDocumentDate,
+        attachments
+      }
+    });
+
+    $("#domestic-trip-form").reset();
+    $("#domestic-form-wrap").classList.add("hidden");
+    await refreshServerState();
+    showToast("تم تسجيل رحلة النقل الداخلي وإرسال الطلب للسائق بنجاح!");
+    switchView("domestic");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderTariffs(query = "") {
+  const tbody = $("#tariff-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#tariff-search")?.value ?? "").trim().toLowerCase();
+
+  const filtered = (state.tariffs || []).filter(item => {
+    if (!q) return true;
+    return (
+      (item.customerName || "").toLowerCase().includes(q) ||
+      (item.origin || "").toLowerCase().includes(q) ||
+      (item.destination || "").toLowerCase().includes(q) ||
+      (item.cargoType || "").toLowerCase().includes(q) ||
+      (item.notes || "").toLowerCase().includes(q)
+    );
+  });
+
+  if ($("#tariff-count")) $("#tariff-count").textContent = (state.tariffs || []).length;
+  if ($("#tariff-empty")) $("#tariff-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(item => `
+    <tr>
+      <td><strong>${escapeHtml(item.customerName)}</strong></td>
+      <td>${escapeHtml(item.origin)}</td>
+      <td>${escapeHtml(item.destination)}</td>
+      <td>${escapeHtml(item.cargoType || "—")}</td>
+      <td><strong style="color: #059669;">${Number(item.price).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</strong></td>
+      <td>${item.driverCost ? `${Number(item.driverCost).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : "—"}</td>
+      <td><small>${escapeHtml(item.notes || "—")}</small></td>
+      <td>
+        <button class="button button-light button-small" data-action="edit-tariff" data-id="${escapeHtml(item.id)}">${translateText("تعديل")}</button>
+        <button class="button button-danger button-small" data-action="delete-tariff" data-id="${escapeHtml(item.id)}">${translateText("حذف")}</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+async function handleTariffSubmit(event) {
+  event.preventDefault();
+  const customerName = $("#tariff-customer")?.value.trim();
+  const origin = $("#tariff-origin")?.value.trim();
+  const destination = $("#tariff-destination")?.value.trim();
+  const cargoType = $("#tariff-cargo-type")?.value.trim() || "";
+  const price = $("#tariff-price")?.value.trim();
+  const driverCost = $("#tariff-driver-cost")?.value.trim() || "";
+  const notes = $("#tariff-notes")?.value.trim() || "";
+
+  if (!customerName || !origin || !destination || !price) {
+    return showToast("أكمل اسم الشركة والمسار وسعر النقل.", true);
+  }
+
+  try {
+    if (editingTariffId) {
+      await apiRequest(`/api/tariffs/${encodeURIComponent(editingTariffId)}`, {
+        method: "PUT",
+        body: { origin, destination, cargoType, price, driverCost, notes }
+      });
+      showToast("تم تحديث سعر المسار.");
+    } else {
+      await apiRequest("/api/tariffs", {
+        method: "POST",
+        body: { customerName, origin, destination, cargoType, price, driverCost, notes }
+      });
+      showToast("تمت إضافة سعر المسار للشركة.");
+    }
+    cancelTariffEdit();
+    await refreshServerState();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function editTariff(id) {
+  const tariff = (state.tariffs || []).find(t => t.id === id);
+  if (!tariff) return;
+  editingTariffId = id;
+  if ($("#tariff-edit-id")) $("#tariff-edit-id").value = id;
+  if ($("#tariff-customer")) {
+    $("#tariff-customer").value = tariff.customerName;
+    $("#tariff-customer").disabled = true;
+  }
+  if ($("#tariff-origin")) $("#tariff-origin").value = tariff.origin;
+  if ($("#tariff-destination")) $("#tariff-destination").value = tariff.destination;
+  if ($("#tariff-cargo-type")) $("#tariff-cargo-type").value = tariff.cargoType || "";
+  if ($("#tariff-price")) $("#tariff-price").value = tariff.price;
+  if ($("#tariff-driver-cost")) $("#tariff-driver-cost").value = tariff.driverCost || "";
+  if ($("#tariff-notes")) $("#tariff-notes").value = tariff.notes || "";
+  if ($("#tariff-submit-button")) $("#tariff-submit-button").textContent = translateText("حفظ التعديلات");
+  $("#tariff-form-wrap")?.classList.remove("hidden");
+  window.scrollTo({ top: $("#tariff-form-wrap").offsetTop - 80, behavior: "smooth" });
+}
+
+function cancelTariffEdit() {
+  editingTariffId = null;
+  $("#tariff-form")?.reset();
+  if ($("#tariff-customer")) $("#tariff-customer").disabled = false;
+  if ($("#tariff-submit-button")) $("#tariff-submit-button").textContent = translateText("حفظ السعر");
+  $("#tariff-form-wrap")?.classList.add("hidden");
+}
+
+async function deleteTariff(id) {
+  const tariff = (state.tariffs || []).find(t => t.id === id);
+  if (!tariff) return;
+  if (!window.confirm(`هل أنت متأكد من حذف تسعيرة المسار (${tariff.origin} ← ${tariff.destination}) لشركة ${tariff.customerName}؟`)) {
+    return;
+  }
+  try {
+    await apiRequest(`/api/tariffs/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await refreshServerState();
+    showToast("تم حذف تسعيرة المسار.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderInvoices(query = "") {
+  const tbody = $("#invoices-rows");
+  if (!tbody) return;
+  const q = String(query ?? $("#invoice-search")?.value ?? "").trim().toLowerCase();
+
+  const invoices = state.invoices || [];
+  const filtered = invoices.filter(inv => {
+    if (!q) return true;
+    return (
+      (inv.invoiceNumber || "").toLowerCase().includes(q) ||
+      (inv.customerName || "").toLowerCase().includes(q) ||
+      (inv.notes || "").toLowerCase().includes(q)
+    );
+  });
+
+  const totalInvoiced = invoices.reduce((acc, inv) => acc + Number(inv.totalAmount || 0), 0);
+  const paidCount = invoices.filter(inv => inv.status === "PAID").length;
+  const unbilledCount = state.docs.filter(d => d.billingStatus === "UNBILLED").length;
+
+  if ($("#invoices-count")) $("#invoices-count").textContent = invoices.length;
+  if ($("#stat-invoice-count")) $("#stat-invoice-count").textContent = invoices.length;
+  if ($("#stat-invoice-total")) $("#stat-invoice-total").textContent = `${totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+  if ($("#stat-unbilled-count")) $("#stat-unbilled-count").textContent = unbilledCount;
+  if ($("#stat-paid-count")) $("#stat-paid-count").textContent = paidCount;
+  if ($("#invoices-empty")) $("#invoices-empty").classList.toggle("hidden", filtered.length > 0);
+
+  tbody.innerHTML = filtered.map(inv => {
+    const statusPill = inv.status === "PAID"
+      ? `<span class="status-pill status-paid">${translateText("مسددة")}</span>`
+      : inv.status === "CANCELLED"
+      ? `<span class="status-pill status-cancelled">${translateText("ملغاة")}</span>`
+      : `<span class="status-pill status-invoiced">${translateText("صادرة")}</span>`;
+
+    const actionButtons = `
+      <button class="button button-primary button-small" data-action="print-invoice" data-id="${escapeHtml(inv.id)}">🖨 ${translateText("معاينة وطباعة")}</button>
+      ${inv.status === "ISSUED" ? `
+        <button class="button button-green button-small" data-action="invoice-paid" data-id="${escapeHtml(inv.id)}">✓ ${translateText("تسجيل سداد")}</button>
+        <button class="button button-danger button-small" data-action="invoice-cancel" data-id="${escapeHtml(inv.id)}">✕ ${translateText("إلغاء")}</button>
+      ` : ""}
+    `;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(inv.invoiceNumber)}</strong></td>
+        <td>${escapeHtml(inv.customerName)}</td>
+        <td>${formatDate(inv.issueDate)}</td>
+        <td><span class="record-count">${inv.tripCount}</span></td>
+        <td>${Number(inv.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        <td>${Number(inv.taxAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        <td><strong style="color: #059669;">${Number(inv.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</strong></td>
+        <td>${statusPill}</td>
+        <td>${actionButtons}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function populateInvoiceWizardCustomers() {
+  const select = $("#invoice-wizard-customer");
+  if (!select) return;
+  const customersWithUnbilled = new Set();
+  state.docs.forEach(doc => {
+    if (doc.billingStatus === "UNBILLED" && doc.customerName) {
+      customersWithUnbilled.add(doc.customerName);
+    }
+  });
+
+  const selectedVal = select.value;
+  select.innerHTML = `<option value="">${translateText("-- اختر الشركة لعرض رحلاتها --")}</option>` +
+    Array.from(customersWithUnbilled).sort().map(name => {
+      const count = state.docs.filter(d => d.customerName === name && d.billingStatus === "UNBILLED").length;
+      return `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${count} رحلات غير مفوترة)</option>`;
+    }).join("");
+
+  if (selectedVal && customersWithUnbilled.has(selectedVal)) {
+    select.value = selectedVal;
+  }
+}
+
+function renderUnbilledTripsForCustomer(customerName) {
+  const tbody = $("#invoice-unbilled-rows");
+  const statusElem = $("#unbilled-selection-status");
+  if (!tbody) return;
+
+  if (!customerName) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">${translateText("يرجى اختيار شركة من القائمة أعلاه")}</td></tr>`;
+    if (statusElem) statusElem.textContent = translateText("اختر شركة أعلاه لعرض عملياتها غير المفوترة");
+    calculateInvoiceWizardTotals();
+    return;
+  }
+
+  const unbilledTrips = state.docs.filter(doc => doc.customerName === customerName && doc.billingStatus === "UNBILLED");
+
+  if (unbilledTrips.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">${translateText("لا توجد رحلات غير مفوترة لهذه الشركة")}</td></tr>`;
+    if (statusElem) statusElem.textContent = translateText("لا توجد عمليات بانتظار الفوترة");
+    calculateInvoiceWizardTotals();
+    return;
+  }
+
+  if (statusElem) {
+    statusElem.textContent = `${unbilledTrips.length} ${translateText("رحلات متاحة للفوترة — حدد الرحلات لإدراجها")}`;
+  }
+
+  tbody.innerHTML = unbilledTrips.map(trip => {
+    const tripTypeLabel = trip.tripType === "DOMESTIC" ? "نقل داخلي" : "نقل ميناء";
+    const refNumber = trip.declarationNumber || trip.cargoWaybillNumber || trip.documentNumber || "—";
+    const cargoLabel = trip.containerNumber || trip.cargoDescription || "—";
+    const rateVal = trip.clientRate ? Number(trip.clientRate) : 0;
+
+    return `
+      <tr>
+        <td><input type="checkbox" class="trip-invoice-check" value="${escapeHtml(trip.tripId)}" data-rate="${rateVal}" checked></td>
+        <td>${formatDate(trip.issuedAt)}</td>
+        <td><span class="status-pill ${trip.tripType === "DOMESTIC" ? "status-domestic" : "status-port"}">${translateText(tripTypeLabel)}</span></td>
+        <td>${escapeHtml(refNumber)}</td>
+        <td>${escapeHtml(cargoLabel)}</td>
+        <td>${escapeHtml(trip.origin || "—")} ← ${escapeHtml(trip.destination || "—")}</td>
+        <td><strong>${rateVal ? `${rateVal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س` : `<span style="color: #b91c1c;">(غير محدد)</span>`}</strong></td>
+      </tr>
+    `;
+  }).join("");
+
+  calculateInvoiceWizardTotals();
+}
+
+function calculateInvoiceWizardTotals() {
+  const checkboxes = $$(".trip-invoice-check:checked", $("#invoice-unbilled-rows"));
+  let subtotal = 0;
+  checkboxes.forEach(cb => {
+    subtotal += Number(cb.dataset.rate || 0);
+  });
+
+  const taxRate = Number($("#invoice-wizard-tax-rate")?.value || 15);
+  const taxAmount = Number(((subtotal * taxRate) / 100).toFixed(2));
+  const total = Number((subtotal + taxAmount).toFixed(2));
+
+  if ($("#invoice-calc-subtotal")) $("#invoice-calc-subtotal").textContent = `${subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+  if ($("#invoice-calc-tax")) $("#invoice-calc-tax").textContent = `${taxAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س (${taxRate}%)`;
+  if ($("#invoice-calc-total")) $("#invoice-calc-total").textContent = `${total.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`;
+
+  if ($("#generate-invoice-button")) {
+    $("#generate-invoice-button").disabled = (checkboxes.length === 0);
+  }
+}
+
+async function handleGenerateInvoice() {
+  const customerName = $("#invoice-wizard-customer")?.value;
+  if (!customerName) return showToast("اختر الشركة أولاً.", true);
+
+  const selectedTrips = $$(".trip-invoice-check:checked", $("#invoice-unbilled-rows")).map(cb => cb.value);
+  if (selectedTrips.length === 0) return showToast("حدد على الأقل رحلة واحدة لإصدار الفاتورة.", true);
+
+  const taxRate = Number($("#invoice-wizard-tax-rate")?.value || 15);
+  const notes = $("#invoice-wizard-notes")?.value.trim() || "";
+  const customInvoiceNumber = $("#invoice-wizard-number")?.value.trim() || undefined;
+
+  try {
+    const created = await apiRequest("/api/invoices", {
+      method: "POST",
+      body: {
+        customerName,
+        tripIds: selectedTrips,
+        taxRate,
+        notes,
+        customInvoiceNumber
+      }
+    });
+
+    $("#invoice-wizard-wrap").classList.add("hidden");
+    await refreshServerState();
+    showToast("تم إصدار الفاتورة الضريبية بنجاح!");
+    openPrintableInvoice(created.id);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function openPrintableInvoice(invoiceId) {
+  const inv = (state.invoices || []).find(i => i.id === invoiceId);
+  if (!inv) return showToast("تعذر العثور على الفاتورة.", true);
+
+  currentPrintableInvoiceId = invoiceId;
+  const printArea = $("#printable-invoice-area");
+  if (!printArea) return;
+
+  const trips = inv.trips || [];
+  const rowsHtml = trips.map((trip, idx) => {
+    const tripTypeLabel = trip.tripType === "DOMESTIC" ? "نقل داخلي" : "نقل ميناء";
+    const refNumber = trip.declarationNumber || trip.cargoWaybillNumber || trip.documentNumber || "—";
+    const cargoLabel = trip.containerNumber || trip.cargoDescription || "—";
+    const rateVal = trip.clientRate ? Number(trip.clientRate) : 0;
+
+    return `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td>${formatDate(trip.issuedAt)}</td>
+        <td>${tripTypeLabel}</td>
+        <td>${escapeHtml(refNumber)}</td>
+        <td>${escapeHtml(cargoLabel)}</td>
+        <td>${escapeHtml(trip.origin || "—")} ← ${escapeHtml(trip.destination || "—")}</td>
+        <td>${escapeHtml(trip.truckPlateNumber || "—")}</td>
+        <td style="text-align: left; font-weight: 700;">${rateVal.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+      </tr>
+    `;
+  }).join("");
+
+  printArea.innerHTML = `
+    <div class="inv-header">
+      <div class="inv-brand">
+        <img class="inv-brand-logo" src="assets/north-world-logo.jpeg" alt="North World Logo">
+        <div>
+          <h1 class="inv-company-name">عَالَمُ الشَّمَالِ لإدارة النقل</h1>
+          <p class="inv-company-subtitle">North World Transport Management</p>
+          <div class="inv-tax-number">الرقم الضريبي: <strong>310245896300003</strong></div>
+        </div>
+      </div>
+      <div class="inv-meta">
+        <h2 class="inv-title">فاتورة ضريبية</h2>
+        <div class="inv-badge status-pill status-invoiced">Tax Invoice</div>
+        <div>رقم الفاتورة: <strong>${escapeHtml(inv.invoiceNumber)}</strong></div>
+        <div>تاريخ الإصدار: <strong>${formatDate(inv.issueDate)}</strong></div>
+        <div>الحالة: <strong>${inv.status === "PAID" ? "مسددة" : "صادرة"}</strong></div>
+      </div>
+    </div>
+
+    <div class="inv-parties">
+      <div>
+        <div class="party-title">الشركة الموردة (الناقل)</div>
+        <div class="party-name">مؤسسة عالم الشمال للنقل البري</div>
+        <div>المملكة العربية السعودية — الرياض</div>
+        <div>هاتف: 0500000000 | البريد: info@northworld.sa</div>
+      </div>
+      <div>
+        <div class="party-title">بيانات العميل المستفيد</div>
+        <div class="party-name">${escapeHtml(inv.customerName)}</div>
+        <div>الرقم الضريبي للعميل: ${escapeHtml(inv.customerTaxNumber || "—")}</div>
+        <div>عدد عمليات النقل: ${inv.tripCount} رحلة</div>
+      </div>
+    </div>
+
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th style="width: 40px; text-align: center;">#</th>
+          <th>تاريخ الرحلة</th>
+          <th>نوع النقل</th>
+          <th>البيان / البوليصة</th>
+          <th>الحاوية / الشحنة</th>
+          <th>المسار (من ← إلى)</th>
+          <th>رقم السيارة</th>
+          <th style="text-align: left;">المبلغ (ريال)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+
+    <div class="inv-totals-box">
+      <table class="inv-totals-table">
+        <tr>
+          <td>المجموع قبل الضريبة:</td>
+          <td style="text-align: left; font-weight: 700;">${Number(inv.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+        <tr>
+          <td>ضريبة القيمة المضافة (${inv.taxRate}%):</td>
+          <td style="text-align: left; font-weight: 700;">${Number(inv.taxAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+        <tr class="grand-total">
+          <td>الإجمالي النهائي المستحق:</td>
+          <td style="text-align: left;">${Number(inv.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>
+        </tr>
+      </table>
+    </div>
+
+    ${inv.notes ? `<div style="margin-bottom: 1.5rem; padding: 10px; background: #f8fafc; border-radius: 6px;"><strong>ملاحظات:</strong> ${escapeHtml(inv.notes)}</div>` : ""}
+
+    <div class="inv-footer">
+      <div>
+        <strong>الشروط والأحكام:</strong><br>
+        • هذه الفاتورة صادرة إلكترونياً من نظام عالم الشمال لإدارة النقل.<br>
+        • يرجى سداد المبلغ المستحق عبر الحساب البنكي المعتمد للمؤسسة.
+      </div>
+      <div class="inv-signature-block">
+        <div class="inv-signature-line"></div>
+        <div>الختم والتوقيع المعتمد</div>
+      </div>
+    </div>
+  `;
+
+  $("#invoice-modal")?.classList.remove("hidden");
+}
+
+async function updateInvoiceStatus(invoiceId, newStatus) {
+  try {
+    await apiRequest(`/api/invoices/${encodeURIComponent(invoiceId)}/status`, {
+      method: "PATCH",
+      body: { status: newStatus }
+    });
+    await refreshServerState();
+    showToast(newStatus === "PAID" ? "تم تسجيل سداد الفاتورة بنجاح." : "تم تحديث حالة الفاتورة.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function init() {
+  updateTodayLabel();
+  populatePortFilter();
+  populateTruckDriverOptions();
+  populateIssueOptions();
+  renderDashboard();
+  renderFasahResults("");
+  renderArchive("");
+  renderReports();
+  populateCustomerDatalist();
+  populateDomesticOptions();
+  renderDomesticTrips();
+  renderTariffs();
+  renderInvoices();
+  populateInvoiceWizardCustomers();
+
+  document.addEventListener("click", event => {
+    const languageButton = event.target.closest("[data-language-toggle]");
+    if (languageButton) {
+      setLanguage(language === "ar" ? "en" : "ar");
+      return;
+    }
+    const driverTab = event.target.closest("[data-driver-tab]");
+    if (driverTab) return showDriverTab(driverTab.dataset.driverTab);
+    const nav = event.target.closest("[data-view]");
+    if (nav) return switchView(nav.dataset.view);
+    const go = event.target.closest("[data-go]");
+    if (go) return switchView(go.dataset.go);
+    const importTemplate = event.target.closest("[data-import-template]");
+    if (importTemplate) return downloadImportTemplate(importTemplate.dataset.importTemplate);
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+    if (action.dataset.action === "pdf") printDocument(action.dataset.id);
+    if (action.dataset.action === "archive") {
+      switchView("archive");
+      $("#archive-query").value = state.docs.find(doc => doc.id === action.dataset.id)?.documentNumber || "";
+      renderArchive($("#archive-query").value);
+    }
+    if (action.dataset.action === "issue-clearance") {
+      populateIssueOptions(action.dataset.id);
+      switchView("issue");
+      $("#issue-clearance").value = action.dataset.id;
+      renderSelectedClearance();
+      matchIssueDriverToSelectedClearance();
+    }
+    if (action.dataset.action === "edit-clearance") beginClearanceEdit(action.dataset.id);
+    if (action.dataset.action === "use-fasah-appointment") prepareTripFromFasahAppointment(action.dataset.id);
+    if (action.dataset.action === "return") {
+      const eir = action.closest(".archive-card")?.querySelector("[data-return-eir]")?.value || "";
+      recordReturn(action.dataset.id, eir);
+    }
+    if (action.dataset.action === "driver-return") recordReturn(action.dataset.id);
+    if (action.dataset.action === "accept-trip") acceptDriverTrip(action.dataset.id);
+    if (action.dataset.action === "advance-trip") advanceDriverTrip(action.dataset.id);
+    if (action.dataset.action === "complete-trip") {
+      const eir = action.closest(".driver-trip-card").querySelector("[data-eir-value]").value;
+      advanceDriverTrip(action.dataset.id, eir);
+    }
+    if (action.dataset.action === "delete-truck") deleteTruck(action.dataset.id);
+    if (action.dataset.action === "delete-driver") deleteDriver(action.dataset.id);
+    if (action.dataset.action === "edit-truck") beginTruckEdit(action.dataset.id);
+    if (action.dataset.action === "edit-driver") beginDriverEdit(action.dataset.id);
+    if (action.dataset.action === "edit-account") beginAccountEdit(action.dataset.id);
+    if (action.dataset.action === "edit-tariff") editTariff(action.dataset.id);
+    if (action.dataset.action === "delete-tariff") deleteTariff(action.dataset.id);
+    if (action.dataset.action === "print-invoice") openPrintableInvoice(action.dataset.id);
+    if (action.dataset.action === "invoice-paid") updateInvoiceStatus(action.dataset.id, "PAID");
+    if (action.dataset.action === "invoice-cancel") updateInvoiceStatus(action.dataset.id, "CANCELLED");
+  });
+  $("#fasah-search-form").addEventListener("submit", event => {
+    event.preventDefault();
+    renderFasahResults($("#fasah-query").value);
+    renderFasahAppointments();
+  });
+  $("#fasah-pdf-extract-form").addEventListener("submit", handleFasahPdfPreview);
+  $("#fasah-appointment-review-form").addEventListener("submit", handleFasahAppointmentSave);
+  $("#fasah-appointment-cancel").addEventListener("click", cancelFasahAppointmentPreview);
+  $("#clearance-form").addEventListener("submit", handleClearanceSubmit);
+  $("#clearance-fetch-latest-pdf").addEventListener("click", fillClearanceFromLatestPdf);
+  $("#clearance-port").addEventListener("input", updateClearancePortCity);
+  $("#clearance-status").addEventListener("change", updateClearanceConfirmation);
+  $("#issue-clearance").addEventListener("change", () => {
+    renderSelectedClearance();
+    matchIssueDriverToSelectedClearance();
+  });
+  $("#issue-truck").addEventListener("change", () => syncIssueTruckDriver("truck"));
+  $("#issue-driver").addEventListener("change", () => syncIssueTruckDriver("driver"));
+  $("#transport-attachments").addEventListener("change", event =>
+    extractTransportDocumentReference(event.currentTarget)
+  );
+  $("#issue-form").addEventListener("submit", issueDocument);
+  $("#truck-filter").addEventListener("input", renderFleet);
+  $("#driver-filter").addEventListener("input", renderDrivers);
+  $("#tracking-query").addEventListener("input", renderTripTracking);
+  $("#tracking-filter").addEventListener("change", renderTripTracking);
+  $("#refresh-tracking").addEventListener("click", () => refreshTracking(true));
+  $("#archive-query").addEventListener("input", event => renderArchive(event.target.value));
+  $("#truck-form").addEventListener("submit", handleTruckSubmit);
+  $("#driver-form").addEventListener("submit", handleDriverSubmit);
+  $("#toggle-truck-form").addEventListener("click", () => {
+    if (editingTruckId) cancelTruckEdit();
+    else $("#truck-form-wrap").classList.toggle("hidden");
+  });
+  $("#toggle-clearance-form").addEventListener("click", () => {
+    if (editingClearanceId) return cancelClearanceEdit();
+    pendingFasahAppointmentId = null;
+    $("#clearance-declaration-field").classList.remove("hidden");
+    $("#clearance-form-wrap").classList.toggle("hidden");
+    updateClearanceConfirmation();
+  });
+  $("#cancel-clearance-edit").addEventListener("click", cancelClearanceEdit);
+  $("#export-clearances-excel").addEventListener("click", exportClearancesExcel);
+  $("#toggle-driver-form").addEventListener("click", () => {
+    if (editingDriverId) cancelDriverEdit();
+    else $("#driver-form-wrap").classList.toggle("hidden");
+  });
+  $("#import-trucks-button").addEventListener("click", () => $("#import-trucks-file").click());
+  $("#import-drivers-button").addEventListener("click", () => $("#import-drivers-file").click());
+  $("#import-trucks-file").addEventListener("change", event => importSpreadsheet("trucks", event.currentTarget));
+  $("#import-drivers-file").addEventListener("change", event => importSpreadsheet("drivers", event.currentTarget));
+  $("#cancel-truck-edit").addEventListener("click", cancelTruckEdit);
+  $("#cancel-driver-edit").addEventListener("click", cancelDriverEdit);
+  $("#truck-rows").addEventListener("change", async event => {
+    if (event.target.matches(".truck-select")) {
+      if (event.target.checked) selectedTruckIds.add(event.target.dataset.id);
+      else selectedTruckIds.delete(event.target.dataset.id);
+      updateBulkControls("trucks", $$(".truck-select", $("#truck-rows")).map(item => item.dataset.id));
+      return;
+    }
+    const truck = truckById(event.target.dataset.id);
+    if (!truck) return;
+    if (event.target.matches(".truck-status")) {
+      if (state.docs.some(doc => doc.truckId === truck.id && doc.requestStatus === "PENDING") && event.target.value !== "ASSIGNED") {
+        renderFleet();
+        return showToast("لا يمكن تغيير حالة شاحنة مرتبطة بطلب بانتظار قبول السائق.", true);
+      }
+      try {
+        await apiRequest(`/api/trucks/${encodeURIComponent(truck.id)}`, {
+          method: "PATCH",
+          body: { status: event.target.value }
+        });
+        await refreshServerState();
+        showToast("تم تحديث حالة السيارة.");
+      } catch (error) {
+        await refreshServerState();
+        showToast(error.message, true);
+      }
+    } else if (event.target.matches(".truck-driver")) {
+      if (state.docs.some(doc => doc.truckId === truck.id && doc.requestStatus === "PENDING")) {
+        renderFleet();
+        return showToast("لا يمكن تغيير سائق الشاحنة قبل قبول الطلب أو إلغائه.", true);
+      }
+      const driver = driverById(event.target.value);
+      if (event.target.value && !driver) return showToast("تعذر العثور على السائق المحدد.", true);
+      try {
+        await apiRequest(`/api/trucks/${encodeURIComponent(truck.id)}`, {
+          method: "PATCH",
+          body: { driverId: event.target.value || null }
+        });
+        await refreshServerState();
+        showToast("تم تحديث السائق المعيّن للسيارة.");
+      } catch (error) {
+        await refreshServerState();
+        showToast(error.message, true);
+      }
+    } else {
+      return;
+    }
+  });
+  $("#driver-rows").addEventListener("change", event => {
+    if (!event.target.matches(".driver-select")) return;
+    if (event.target.checked) selectedDriverIds.add(event.target.dataset.id);
+    else selectedDriverIds.delete(event.target.dataset.id);
+    updateBulkControls("drivers", $$(".driver-select", $("#driver-rows")).map(item => item.dataset.id));
+  });
+  $("#select-all-trucks").addEventListener("change", event => {
+    selectVisibleRecords("trucks", $$(".truck-select", $("#truck-rows")).map(item => item.dataset.id), event.target.checked);
+  });
+  $("#select-all-drivers").addEventListener("change", event => {
+    selectVisibleRecords("drivers", $$(".driver-select", $("#driver-rows")).map(item => item.dataset.id), event.target.checked);
+  });
+  $("#delete-selected-trucks").addEventListener("click", deleteSelectedTrucks);
+  $("#delete-selected-drivers").addEventListener("click", deleteSelectedDrivers);
+  $("#clear-selected-trucks").addEventListener("click", () => clearSelection("trucks"));
+  $("#clear-selected-drivers").addEventListener("click", () => clearSelection("drivers"));
+  $("#admin-setup-form").addEventListener("submit", setupFirstAdmin);
+  $("#login-form").addEventListener("submit", login);
+  $("#admin-logout").addEventListener("click", logout);
+  $("#driver-logout").addEventListener("click", logout);
+  $("#driver-expense-form").addEventListener("submit", handleTripExpenseSubmit);
+  $("#account-role").addEventListener("change", updateAccountRoleFields);
+  $("#account-form").addEventListener("submit", handleAccountSubmit);
+  $("#cancel-account-edit").addEventListener("click", cancelAccountEdit);
+  ["filter-from", "filter-to", "filter-port", "filter-customer", "filter-return"].forEach(id => {
+    $(`#${id}`).addEventListener("input", renderReports);
+    $(`#${id}`).addEventListener("change", renderReports);
+  });
+  $("#clear-filters").addEventListener("click", clearReportFilters);
+  $("#export-excel").addEventListener("click", exportExcel);
+
+  // Domestic Trips listeners
+  $("#toggle-domestic-form")?.addEventListener("click", () => {
+    $("#domestic-form-wrap")?.classList.toggle("hidden");
+    populateDomesticOptions();
+  });
+  $("#cancel-domestic-button")?.addEventListener("click", () => {
+    $("#domestic-form-wrap")?.classList.add("hidden");
+  });
+  $("#domestic-trip-form")?.addEventListener("submit", handleDomesticTripSubmit);
+  $("#domestic-filter")?.addEventListener("input", event => renderDomesticTrips(event.target.value));
+  $("#domestic-customer")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-origin")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-destination")?.addEventListener("input", autoLookupDomesticTariff);
+  $("#domestic-driver")?.addEventListener("change", () => syncDomesticTruckDriver("driver"));
+  $("#domestic-truck")?.addEventListener("change", () => syncDomesticTruckDriver("truck"));
+
+  // Tariff auto-lookup on Port issue form
+  $("#issue-customer")?.addEventListener("input", autoLookupIssueTariff);
+  $("#issue-destination")?.addEventListener("input", autoLookupIssueTariff);
+
+  // Tariffs listeners
+  $("#toggle-tariff-form")?.addEventListener("click", () => {
+    if (editingTariffId) cancelTariffEdit();
+    else $("#tariff-form-wrap")?.classList.toggle("hidden");
+  });
+  $("#cancel-tariff-button")?.addEventListener("click", cancelTariffEdit);
+  $("#tariff-form")?.addEventListener("submit", handleTariffSubmit);
+  $("#tariff-search")?.addEventListener("input", event => renderTariffs(event.target.value));
+
+  // Invoices listeners
+  $("#toggle-invoice-wizard")?.addEventListener("click", () => {
+    $("#invoice-wizard-wrap")?.classList.toggle("hidden");
+    populateInvoiceWizardCustomers();
+  });
+  $("#close-invoice-wizard")?.addEventListener("click", () => {
+    $("#invoice-wizard-wrap")?.classList.add("hidden");
+  });
+  $("#invoice-wizard-customer")?.addEventListener("change", event => {
+    renderUnbilledTripsForCustomer(event.target.value);
+  });
+  $("#invoice-wizard-tax-rate")?.addEventListener("input", calculateInvoiceWizardTotals);
+  $("#invoice-select-all-trips")?.addEventListener("click", () => {
+    const checks = $$(".trip-invoice-check", $("#invoice-unbilled-rows"));
+    const allChecked = checks.length > 0 && checks.every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+    calculateInvoiceWizardTotals();
+  });
+  $("#invoice-master-checkbox")?.addEventListener("change", event => {
+    $$(".trip-invoice-check", $("#invoice-unbilled-rows")).forEach(c => c.checked = event.target.checked);
+    calculateInvoiceWizardTotals();
+  });
+  $("#invoice-unbilled-rows")?.addEventListener("change", event => {
+    if (event.target.matches(".trip-invoice-check")) {
+      calculateInvoiceWizardTotals();
+    }
+  });
+  $("#generate-invoice-button")?.addEventListener("click", handleGenerateInvoice);
+  $("#invoice-search")?.addEventListener("input", event => renderInvoices(event.target.value));
+
+  // Invoice Modal actions
+  $("#print-invoice-btn")?.addEventListener("click", () => window.print());
+  $("#close-invoice-modal-btn")?.addEventListener("click", () => $("#invoice-modal")?.classList.add("hidden"));
+  $("#invoice-modal-backdrop")?.addEventListener("click", () => $("#invoice-modal")?.classList.add("hidden"));
+
+  setAccountFormMode(false);
+  updateAccountRoleFields();
+  renderAccounts();
+  restoreSessionOrShowLogin();
+}
+
+init();
+localizeDocument();
+new MutationObserver(() => localizeDocument()).observe(document.body, {
+  childList: true,
+  characterData: true,
+  subtree: true
 });
-
-$$("[data-view]").forEach(button => {
-  button.addEventListener("click", () => switchView(button.dataset.view));
-});
-
-$("#logout-button")?.addEventListener("click", logout);
-$("#driver-logout-button")?.addEventListener("click", logout);
-
-restoreSessionOrShowLogin();
-
-// Duplicate and trailing function stubs removed to fix file corruption and allow login page to load again.
-// The following is the correct start of the beginTruckEdit function:
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return showToast("تعذر العثور على السيارة المطلوبة.", true);
-  if (editingDriverId) cancelDriverEdit();
-  const form = $("#truck-form");
-  editingTruckId = truck.id;
-  form.reset();
-  populateTruckDriverOptions();
-  form.elements.fleetNumber.value = truck.fleetNumber;
-  form.elements.plateNumber.value = truck.plateNumber;
-  form.elements.serialNumber.value = truck.serialNumber;
-  form.elements.model.value = truck.model;
-  form.elements.driverId.value = truck.driverId;
-  $("#truck-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-truck-edit").classList.remove("hidden");
-  $("#truck-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelTruckEdit() {
-  editingTruckId = null;
-  $("#truck-form").reset();
-  $("#truck-submit-button").textContent = "حفظ الشاحنة";
-  $("#cancel-truck-edit").classList.add("hidden");
-  $("#truck-form-wrap").classList.add("hidden");
-  populateTruckDriverOptions();
-}
-
-async function deleteDriver(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السائق ${driver.name}؟ ستبقى بياناته ظاهرة في وثائقه السابقة.`)) return;
-  try {
-    await apiRequest(`/api/drivers/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingDriverId === id) cancelDriverEdit();
-    selectedDriverIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السائق من القائمة مع الاحتفاظ بسجلاته السابقة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginDriverEdit(id) {
-  const driver = driverById(id);
-  if (!driver || driver.deletedAt) return showToast("تعذر العثور على السائق المطلوب.", true);
-  if (editingTruckId) cancelTruckEdit();
-  const form = $("#driver-form");
-  editingDriverId = driver.id;
-  form.reset();
-  form.elements.name.value = driver.name;
-  form.elements.nationalId.value = driver.nationalId;
-  form.elements.phone.value = driver.phone;
-  form.elements.passportNumber.value = driver.passportNumber || "";
-  $("#driver-submit-button").textContent = "حفظ التعديلات";
-  $("#cancel-driver-edit").classList.remove("hidden");
-  $("#driver-form-wrap").classList.remove("hidden");
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function cancelDriverEdit() {
-  editingDriverId = null;
-  $("#driver-form").reset();
-  $("#driver-submit-button").textContent = "حفظ السائق";
-  $("#cancel-driver-edit").classList.add("hidden");
-  $("#driver-form-wrap").classList.add("hidden");
-}
-
-async function deleteSelectedTrucks() {
-  const selected = [...selectedTruckIds].map(truckById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سيارة نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/trucks/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingTruckId)) cancelTruckEdit();
-    result.deleted.forEach(id => selectedTruckIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سيارة نهائياً من قاعدة البيانات.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سيارة لارتباطها برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function deleteSelectedDrivers() {
-  const selected = [...selectedDriverIds].map(driverById).filter(item => item && !item.deletedAt);
-  if (!selected.length) return;
-  if (!window.confirm(`تأكيد حذف ${selected.length} سائق؟ ستبقى سجلاتهم السابقة في الأرشيف.`)) return;
-  try {
-    const result = await apiRequest("/api/drivers/bulk-delete", {
-      method: "POST",
-      body: { ids: selected.map(item => item.id) }
-    });
-    if (result.deleted.includes(editingDriverId)) cancelDriverEdit();
-    result.deleted.forEach(id => selectedDriverIds.delete(id));
-    await refreshServerState();
-    showToast(`تم حذف ${result.deleted.length} سائق.${result.blocked.length ? ` تم الإبقاء على ${result.blocked.length} سائق لارتباطه برحلات نشطة.` : ""}`, result.blocked.length > 0);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function selectVisibleRecords(type, visibleIds, selected) {
-  const selectedIds = type === "trucks" ? selectedTruckIds : selectedDriverIds;
-  const prefix = type === "trucks" ? "truck" : "driver";
-  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
-  const selectAll = $(`#select-all-${type}`);
-  selectAll.checked = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.length;
-  selectAll.disabled = visibleIds.length === 0;
-  const count = $(`#${prefix}-selection-count`);
-  const deleteButton = $(`#delete-selected-${type}`);
-  const clearButton = $(`#clear-selected-${type}`);
-  count.textContent = `تم تحديد ${selectedIds.size}`;
-  count.classList.toggle("hidden", selectedIds.size === 0);
-  deleteButton.disabled = selectedIds.size === 0;
-  deleteButton.textContent = `حذف المحدد${selectedIds.size ? ` (${selectedIds.size})` : ""}`;
-  clearButton.classList.toggle("hidden", selectedIds.size === 0);
-}
-
-async function deleteTruck(id) {
-  const truck = truckById(id);
-  if (!truck || truck.deletedAt) return;
-  if (!window.confirm(`هل تريد حذف السيارة ${truck.plateNumber} نهائياً من قاعدة البيانات؟ ستبقى وثائقها السابقة محفوظة في الأرشيف.`)) return;
-  try {
-    await apiRequest(`/api/trucks/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (editingTruckId === id) cancelTruckEdit();
-    selectedTruckIds.delete(id);
-    await refreshServerState();
-    showToast("تم حذف السيارة نهائياً من قاعدة البيانات؛ بقيت وثائقها وتقاريرها السابقة محفوظة.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function beginTruckEdit(id) {
- 
+window.setInterval(() => {
+  if (currentAccount?.role === "ADMIN" && !document.hidden && $("#view-tracking").classList.contains("active")) {
+    refreshTracking();
+  }
+}, 30000);
